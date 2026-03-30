@@ -13,6 +13,7 @@ from luminos_lib.recency import find_recent_files
 from luminos_lib.disk import get_disk_usage, top_directories
 from luminos_lib.watch import watch_loop
 from luminos_lib.report import format_report
+from luminos_lib.ai import analyze_directory
 
 
 def scan(target, depth=3, show_hidden=False):
@@ -56,6 +57,9 @@ def main():
                         help="Output report as JSON")
     parser.add_argument("-o", "--output", metavar="FILE",
                         help="Write report to a file")
+    parser.add_argument("--ai", action="store_true",
+                        help="Use Claude AI to analyze directory purpose "
+                             "(requires ANTHROPIC_API_KEY)")
     parser.add_argument("--watch", action="store_true",
                         help="Re-scan every 30 seconds and show diffs")
 
@@ -73,6 +77,11 @@ def main():
         return
 
     report = scan(target, depth=args.depth, show_hidden=args.all)
+
+    if args.ai:
+        brief, detailed = analyze_directory(report, target)
+        report["ai_brief"] = brief
+        report["ai_detailed"] = detailed
 
     if args.json_output:
         output = json.dumps(report, indent=2, default=str)

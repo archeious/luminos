@@ -11,6 +11,15 @@ def format_report(report, target):
     lines.append(f"  Target: {target}")
     lines.append(sep)
 
+    # AI brief summary (top of report)
+    ai_brief = report.get("ai_brief", "")
+    if ai_brief:
+        lines.append("")
+        lines.append(">> SUMMARY (AI)")
+        lines.append("-" * 40)
+        for paragraph in ai_brief.split("\n"):
+            lines.append(f"  {paragraph}")
+
     # Directory tree
     lines.append("")
     lines.append(">> DIRECTORY TREE")
@@ -77,6 +86,15 @@ def format_report(report, target):
             lines.append(f"  {d['size_human']:>10}  {d['path']}")
     else:
         lines.append("  No usage data available.")
+
+    # AI detailed breakdown (end of report)
+    ai_detailed = report.get("ai_detailed", "")
+    if ai_detailed:
+        lines.append("")
+        lines.append(">> DETAILED AI ANALYSIS")
+        lines.append("-" * 40)
+        for paragraph in ai_detailed.split("\n"):
+            lines.append(f"  {paragraph}")
 
     lines.append("")
     lines.append(sep)
