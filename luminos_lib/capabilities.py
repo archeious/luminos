@@ -123,7 +123,7 @@ def print_status():
     print(f"\n  Install all with:\n    pip install {' '.join(all_pkgs)}\n")
 
 
-CACHE_ROOT = "/tmp/luminos"
+from luminos_lib.cache import CACHE_ROOT
 
 
 def clear_cache():
