@@ -71,3 +71,58 @@ python3 luminos.py --ai <target_directory>
 - **Subprocess for OS tools.** Line counting, file detection, disk usage, and recency all shell out to GNU coreutils. Do not reimplement these in pure Python.
 - **AI is opt-in.** The `--ai` flag gates all Claude API calls. Without it (or without `ANTHROPIC_API_KEY`), the tool must produce a complete report with no errors.
 - **Graceful degradation everywhere.** Permission denied, subprocess timeouts, missing API key — all handled without crashing.
+
+## Git Workflow
+
+Every change starts on a branch. Nothing goes directly to main.
+
+### Branch naming
+
+Create a branch before starting any work:
+
+```bash
+git checkout -b <type>/<short-description>
+```
+
+Branch type matches the commit prefix:
+
+| Type | Use |
+|---|---|
+| `feat/` | New feature or capability |
+| `fix/` | Bug fix |
+| `refactor/` | Restructure without behavior change |
+| `chore/` | Tooling, config, documentation |
+| `test/` | Tests |
+
+Examples:
+```
+feat/venv-setup-script
+fix/token-budget-early-exit
+refactor/capabilities-module
+chore/update-claude-md
+```
+
+### Commit messages
+
+Format: `<type>: <short description>`
+
+```
+feat: add parse_structure tool via tree-sitter
+fix: flush cache on context budget early exit
+refactor: extract token tracking into separate class
+chore: update CLAUDE.md with git workflow
+```
+
+One commit per logical unit of work, not one per file.
+
+### Merge procedure
+
+When the task is complete:
+
+```bash
+git checkout main
+git merge --no-ff <branch> -m "merge: <description>"
+git branch -d <branch>
+```
+
+The `--no-ff` flag preserves branch history in the log even after merge. Delete the branch after merging to keep the branch list clean.
