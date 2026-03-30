@@ -99,16 +99,18 @@ def main():
 
     report = scan(target, depth=args.depth, show_hidden=args.all)
 
+    flags = []
     if args.ai:
         from luminos_lib.ai import analyze_directory
-        brief, detailed = analyze_directory(report, target, fresh=args.fresh)
+        brief, detailed, flags = analyze_directory(report, target, fresh=args.fresh)
         report["ai_brief"] = brief
         report["ai_detailed"] = detailed
+        report["flags"] = flags
 
     if args.json_output:
         output = json.dumps(report, indent=2, default=str)
     else:
-        output = format_report(report, target)
+        output = format_report(report, target, flags=flags)
 
     if args.output:
         try:

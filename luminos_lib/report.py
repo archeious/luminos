@@ -1,7 +1,35 @@
 """Report formatting — human-readable terminal output."""
 
 
-def format_report(report, target):
+_SEVERITY_ORDER = {"critical": 0, "concern": 1, "info": 2}
+
+
+def format_flags(flags):
+    """Format a list of flag dicts as a human-readable string.
+
+    Returns empty string if flags is empty.
+    """
+    if not flags:
+        return ""
+
+    sorted_flags = sorted(flags, key=lambda f: _SEVERITY_ORDER.get(
+        f.get("severity", "info"), 99))
+
+    lines = []
+    lines.append("")
+    lines.append(">> FLAGS")
+    lines.append("-" * 40)
+    for f in sorted_flags:
+        severity = f.get("severity", "info").upper()
+        path = f.get("path", "general")
+        finding = f.get("finding", "")
+        lines.append(f"  [{severity:<8s}] {path}")
+        lines.append(f"             {finding}")
+
+    return "\n".join(lines)
+
+
+def format_report(report, target, flags=None):
     """Format the full report as a human-readable string."""
     sep = "=" * 60
     lines = []
@@ -95,6 +123,11 @@ def format_report(report, target):
         lines.append("-" * 40)
         for paragraph in ai_detailed.split("\n"):
             lines.append(f"  {paragraph}")
+
+    # Flags
+    flags_text = format_flags(flags or [])
+    if flags_text:
+        lines.append(flags_text)
 
     lines.append("")
     lines.append(sep)
