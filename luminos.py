@@ -13,7 +13,6 @@ from luminos_lib.recency import find_recent_files
 from luminos_lib.disk import get_disk_usage, top_directories
 from luminos_lib.watch import watch_loop
 from luminos_lib.report import format_report
-from luminos_lib.ai import analyze_directory
 
 
 def scan(target, depth=3, show_hidden=False):
@@ -48,7 +47,7 @@ def main():
         description="Luminos — file system intelligence tool. "
                     "Explores a directory and produces a reconnaissance report.",
     )
-    parser.add_argument("target", help="Target directory to analyze")
+    parser.add_argument("target", nargs="?", help="Target directory to analyze")
     parser.add_argument("-d", "--depth", type=int, default=3,
                         help="Maximum tree depth (default: 3)")
     parser.add_argument("-a", "--all", action="store_true",
@@ -62,8 +61,30 @@ def main():
                              "(requires ANTHROPIC_API_KEY)")
     parser.add_argument("--watch", action="store_true",
                         help="Re-scan every 30 seconds and show diffs")
+    parser.add_argument("--clear-cache", action="store_true",
+                        help="Clear the AI investigation cache (/tmp/luminos/)")
+    parser.add_argument("--fresh", action="store_true",
+                        help="Force a new AI investigation (ignore cached results)")
+    parser.add_argument("--install-extras", action="store_true",
+                        help="Show status of optional AI dependencies")
 
     args = parser.parse_args()
+
+    # --install-extras: show package status and exit
+    if args.install_extras:
+        from luminos_lib.capabilities import print_status
+        print_status()
+        return
+
+    # --clear-cache: wipe /tmp/luminos/ (lazy import to avoid AI deps)
+    if args.clear_cache:
+        from luminos_lib.capabilities import clear_cache
+        clear_cache()
+        if not args.target:
+            return
+
+    if not args.target:
+        parser.error("the following arguments are required: target")
 
     target = os.path.abspath(args.target)
     if not os.path.isdir(target):
@@ -79,7 +100,8 @@ def main():
     report = scan(target, depth=args.depth, show_hidden=args.all)
 
     if args.ai:
-        brief, detailed = analyze_directory(report, target)
+        from luminos_lib.ai import analyze_directory
+        brief, detailed = analyze_directory(report, target, fresh=args.fresh)
         report["ai_brief"] = brief
         report["ai_detailed"] = detailed
 
