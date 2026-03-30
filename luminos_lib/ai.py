@@ -1016,6 +1016,56 @@ def _run_dir_loop(client, target, cache, tracker, dir_path, max_turns=10,
         if tracker.budget_exceeded():
             print(f"  [AI]   Context budget reached — exiting early "
                   f"({tracker.loop_total:,} tokens used)", file=sys.stderr)
+            # Flush a partial directory summary from cached file entries
+            if not cache.has_entry("dir", dir_path):
+                dir_real = os.path.realpath(dir_path)
+                file_entries = [
+                    e for e in cache.read_all_entries("file")
+                    if os.path.realpath(e.get("path", "")).startswith(
+                        dir_real + os.sep)
+                    or os.path.dirname(
+                        os.path.join(target, e.get("relative_path", ""))
+                    ) == dir_real
+                ]
+                if file_entries:
+                    file_summaries = [
+                        e["summary"] for e in file_entries if e.get("summary")
+                    ]
+                    notable = [
+                        e.get("relative_path", e.get("path", ""))
+                        for e in file_entries if e.get("notable")
+                    ]
+                    partial_summary = " ".join(file_summaries)
+                    cache.write_entry("dir", dir_path, {
+                        "path": dir_path,
+                        "relative_path": os.path.relpath(dir_path, target),
+                        "child_count": len([
+                            n for n in os.listdir(dir_path)
+                            if not n.startswith(".")
+                        ]) if os.path.isdir(dir_path) else 0,
+                        "summary": partial_summary,
+                        "dominant_category": "unknown",
+                        "notable_files": notable,
+                        "partial": True,
+                        "partial_reason": "context budget reached",
+                        "cached_at": _now_iso(),
+                    })
+                    if not summary:
+                        summary = partial_summary
+                else:
+                    cache.write_entry("dir", dir_path, {
+                        "path": dir_path,
+                        "relative_path": os.path.relpath(dir_path, target),
+                        "child_count": 0,
+                        "summary": ("Investigation incomplete — context budget "
+                                    "reached before any files were processed."),
+                        "dominant_category": "unknown",
+                        "notable_files": [],
+                        "partial": True,
+                        "partial_reason": (
+                            "context budget reached before files processed"),
+                        "cached_at": _now_iso(),
+                    })
             break
 
         try:
