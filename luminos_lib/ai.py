@@ -25,7 +25,7 @@ import tree_sitter_javascript
 import tree_sitter_rust
 import tree_sitter_go
 
-from luminos_lib.cache import CACHE_ROOT, _CacheManager, _get_investigation_id
+from luminos_lib.cache import _CacheManager, _get_investigation_id
 from luminos_lib.capabilities import check_ai_dependencies
 
 MODEL = "claude-sonnet-4-20250514"
@@ -1380,21 +1380,6 @@ def _run_investigation(client, target, report, show_hidden=False,
     print(f"  [AI] Total tokens used: {tracker.summary()}", file=sys.stderr)
 
     return brief, detailed, flags
-
-
-# ---------------------------------------------------------------------------
-# Cache cleanup
-# ---------------------------------------------------------------------------
-
-def clear_cache():
-    """Remove all investigation caches under /tmp/luminos/."""
-    import shutil
-    if os.path.isdir(CACHE_ROOT):
-        shutil.rmtree(CACHE_ROOT)
-        print(f"Cleared cache: {CACHE_ROOT}", file=sys.stderr)
-    else:
-        print(f"No cache to clear ({CACHE_ROOT} does not exist).",
-              file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
