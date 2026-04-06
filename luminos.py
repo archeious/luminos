@@ -3,8 +3,9 @@
 
 import argparse
 import json
-import sys
 import os
+import shutil
+import sys
 
 from luminos_lib.tree import build_tree, render_tree
 from luminos_lib.filetypes import classify_files, summarize_categories
@@ -13,6 +14,28 @@ from luminos_lib.recency import find_recent_files
 from luminos_lib.disk import get_disk_usage, top_directories
 from luminos_lib.watch import watch_loop
 from luminos_lib.report import format_report
+
+
+def _progress(label):
+    """Return (on_file, finish) for in-place per-file progress on stderr.
+
+    on_file(path) overwrites the current line with the label and truncated path.
+    finish() finalises the line with a newline.
+    """
+    cols = shutil.get_terminal_size((80, 20)).columns
+    prefix = f"  [scan] {label}... "
+    available = max(cols - len(prefix), 10)
+
+    def on_file(path):
+        rel = os.path.relpath(path)
+        if len(rel) > available:
+            rel = "..." + rel[-(available - 3):]
+        print(f"\r{prefix}{rel}\033[K", end="", file=sys.stderr, flush=True)
+
+    def finish():
+        print(f"\r{prefix}done\033[K", file=sys.stderr, flush=True)
+
+    return on_file, finish
 
 
 def scan(target, depth=3, show_hidden=False):
@@ -24,16 +47,21 @@ def scan(target, depth=3, show_hidden=False):
     report["tree"] = tree
     report["tree_rendered"] = render_tree(tree)
 
-    print("  [scan] Classifying files...", file=sys.stderr)
-    classified = classify_files(target, show_hidden=show_hidden)
+    on_file, finish = _progress("Classifying files")
+    classified = classify_files(target, show_hidden=show_hidden, on_file=on_file)
+    finish()
     report["file_categories"] = summarize_categories(classified)
     report["classified_files"] = classified
 
-    print("  [scan] Detecting languages and counting lines...", file=sys.stderr)
-    languages, loc = detect_languages(classified)
+    on_file, finish = _progress("Counting lines")
+    languages, loc = detect_languages(classified, on_file=on_file)
+    finish()
     report["languages"] = languages
     report["lines_of_code"] = loc
-    report["large_files"] = find_large_files(classified)
+
+    on_file, finish = _progress("Checking for large files")
+    report["large_files"] = find_large_files(classified, on_file=on_file)
+    finish()
 
     print("  [scan] Finding recently modified files...", file=sys.stderr)
     report["recent_files"] = find_recent_files(target, show_hidden=show_hidden)

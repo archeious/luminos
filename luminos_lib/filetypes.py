@@ -86,10 +86,11 @@ def _classify_one(filepath):
     return "unknown", desc
 
 
-def classify_files(target, show_hidden=False):
+def classify_files(target, show_hidden=False, on_file=None):
     """Walk the target directory and classify every file.
 
     Returns a list of dicts: {path, name, category, size, description}.
+    on_file(path) is called after each file is classified, if provided.
     """
     results = []
     for root, dirs, files in os.walk(target):
@@ -112,6 +113,8 @@ def classify_files(target, show_hidden=False):
                 "size": size,
                 "description": desc,
             })
+            if on_file:
+                on_file(full)
     return results
 
 
