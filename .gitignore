@@ -26,3 +26,6 @@ Thumbs.db
 
 # Luminos output
 *.json.report
+
+# Wiki (separate git repo)
+docs/wiki/
