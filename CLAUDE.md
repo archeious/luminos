@@ -10,9 +10,9 @@
 
 ## Current Project State
 
-- **Phase:** Active development — core pipeline stable, planning and domain intelligence work next
+- **Phase:** Active development — issue tracking and MCP configured, Phase 1 (confidence tracking) ready to start
 - **Last worked on:** 2026-04-06
-- **Last commit:** chore: ignore docs/wiki/ — separate git repo
+- **Last commit:** chore: update CLAUDE.md for session 2
 - **Blocking:** None
 
 ---
@@ -179,5 +179,6 @@ python3 luminos.py --install-extras
 | # | Date | Summary |
 |---|---|---|
 | 1 | 2026-04-06 | Project setup, scan progress output, in-place file display, --exclude flag, Forgejo repo, PLAN.md, wiki, development practices |
+| 2 | 2026-04-06 | Forgejo milestones (9), issues (36), project board, Gitea MCP installed and configured globally |
 
 Full log: wiki — [Session Retrospectives](https://forgejo.labbity.unbiasedgeek.com/archeious/luminos/wiki/SessionRetrospectives)
