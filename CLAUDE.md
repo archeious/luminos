@@ -89,6 +89,11 @@ python3 luminos.py --install-extras
 - **Explain then build** — articulate the approach in a few bullets before
   writing code. Surface assumptions early.
 - **Atomic commits** — each commit is one logical change.
+- **Test coverage required** — every change to a testable module must include
+  or update tests in `tests/`. Run with `python3 -m unittest discover -s tests/`.
+  All tests must pass before merging. Modules exempt from unit testing:
+  `ai.py` (requires live API), `ast_parser.py` (requires tree-sitter),
+  `watch.py` (stateful events), `prompts.py` (string templates only).
 - **Shiny object capture** — new ideas go to PLAN.md (Raw Thoughts) or a
   Forgejo issue, not into current work.
 
