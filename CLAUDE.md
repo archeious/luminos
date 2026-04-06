@@ -1,128 +1,141 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+> Before starting any session: what's the one thing we're shipping today?
+
+---
+
+## Current Project State
+
+- **Phase:** Active development — core pipeline stable, planning and domain intelligence work next
+- **Last worked on:** 2026-04-06
+- **Last commit:** merge: add -x/--exclude flag for directory exclusion
+- **Blocking:** None
+
+---
+
+## Project Overview
+
+Luminos is a file system intelligence tool — a zero-dependency Python CLI that
+scans a directory and produces a reconnaissance report. With `--ai` it runs a
+multi-pass agentic investigation via the Claude API.
+
+---
+
+## Module Map
+
+| Module | Purpose |
+|---|---|
+| `luminos.py` | Entry point — arg parsing, scan(), main() |
+| `luminos_lib/ai.py` | Multi-pass agentic analysis via Claude API |
+| `luminos_lib/ast_parser.py` | tree-sitter code structure parsing |
+| `luminos_lib/cache.py` | Investigation cache management |
+| `luminos_lib/capabilities.py` | Optional dep detection, cache cleanup |
+| `luminos_lib/code.py` | Language detection, LOC counting |
+| `luminos_lib/disk.py` | Per-directory disk usage |
+| `luminos_lib/filetypes.py` | File classification (7 categories) |
+| `luminos_lib/prompts.py` | AI system prompt templates |
+| `luminos_lib/recency.py` | Recently modified files |
+| `luminos_lib/report.py` | Terminal report formatter |
+| `luminos_lib/tree.py` | Directory tree visualization |
+| `luminos_lib/watch.py` | Watch mode with snapshot diffing |
+
+Details: wiki — [Architecture](https://forgejo.labbity.unbiasedgeek.com/archeious/luminos/wiki/Architecture) | [Development Guide](https://forgejo.labbity.unbiasedgeek.com/archeious/luminos/wiki/DevelopmentGuide)
+
+---
+
+## Key Constraints
+
+- **Base tool: no pip dependencies.** tree, filetypes, code, disk, recency,
+  report, watch use only stdlib and GNU coreutils. Must always work on bare Python 3.
+- **AI deps are lazy.** `anthropic`, `tree-sitter`, `python-magic` imported only
+  when `--ai` is used. Missing packages produce a clear install error.
+- **Subprocess for OS tools.** LOC counting, file detection, disk usage, and
+  recency shell out to GNU coreutils. Do not reimplement in pure Python.
+- **Graceful degradation everywhere.** Permission denied, subprocess timeouts,
+  missing API key — all handled without crashing.
+
+---
 
 ## Running Luminos
 
 ```bash
-# Basic scan
-python3 luminos.py <target_directory>
+# Base scan
+python3 luminos.py <target>
 
-# With AI analysis (requires ANTHROPIC_API_KEY env var)
-python3 luminos.py --ai <target_directory>
-
-# JSON output to file
-python3 luminos.py --json -o report.json <target_directory>
-
-# Watch mode (re-scans every 30s, shows diffs)
-python3 luminos.py --watch <target_directory>
-```
-
-There is no build step, no test suite, and no linter configured.
-
-## Architecture
-
-The base tool is a zero-dependency Python CLI (stdlib only). The `--ai` flag requires optional pip packages installed in a venv. The entry point `luminos.py` defines `scan()` which orchestrates all analysis modules and returns a report dict, and `main()` which handles argument parsing and output routing.
-
-Each analysis capability lives in its own module under `luminos_lib/`:
-
-| Module | Purpose | External commands used |
-|---|---|---|
-| `tree.py` | Recursive directory tree with file sizes | None (uses `os`) |
-| `filetypes.py` | Classifies files into 7 categories (source, config, data, media, document, archive, unknown) | `file --brief` |
-| `code.py` | Language detection, LOC counting, large file flagging | `wc -l` |
-| `recency.py` | Finds N most recently modified files | `find -printf` |
-| `disk.py` | Per-directory disk usage | `du -b` |
-| `report.py` | Formats the report dict as human-readable terminal output | None |
-| `ai.py` | Multi-pass agentic directory analysis via Claude API (streaming, token counting, caching) | Requires `anthropic`, `tree-sitter`, `python-magic` |
-| `capabilities.py` | Optional dependency detection, cache cleanup | None |
-| `watch.py` | Continuous monitoring loop with snapshot diffing | None (re-uses `filetypes.classify_files`) |
-
-**Data flow:** `scan()` builds a report dict → optional `analyze_directory()` adds AI fields → `format_report()` or `json.dumps()` produces output.
-
-## Optional Dependencies (--ai flag only)
-
-The base tool requires zero pip packages. The `--ai` flag requires:
-
-```bash
-# One-time setup
-bash setup_env.sh
-
-# Or manually:
-python3 -m venv ~/luminos-env
+# With AI analysis (requires ANTHROPIC_API_KEY)
 source ~/luminos-env/bin/activate
-pip install anthropic tree-sitter tree-sitter-python \
-            tree-sitter-javascript tree-sitter-rust \
-            tree-sitter-go python-magic
+python3 luminos.py --ai <target>
+
+# Common flags
+python3 luminos.py -d 8 -a -x .git -x node_modules <target>
+python3 luminos.py --json -o report.json <target>
+python3 luminos.py --watch <target>
+python3 luminos.py --install-extras
 ```
 
-Check current status with `python3 luminos.py --install-extras`.
-
-Always activate the venv before using `--ai`:
-```bash
-source ~/luminos-env/bin/activate
-python3 luminos.py --ai <target_directory>
-```
-
-## Key Constraints
-
-- **Base tool: no pip dependencies.** The base scan (tree, file types, code, disk, recency, report, watch) uses only stdlib and GNU coreutils. It must always work on a bare Python 3 install.
-- **AI deps are gated.** The `anthropic`, `tree-sitter`, and `python-magic` packages are imported lazily, only when `--ai` is used. Missing packages produce a clear error with the install command.
-- **Subprocess for OS tools.** Line counting, file detection, disk usage, and recency all shell out to GNU coreutils. Do not reimplement these in pure Python.
-- **AI is opt-in.** The `--ai` flag gates all Claude API calls. Without it (or without `ANTHROPIC_API_KEY`), the tool must produce a complete report with no errors.
-- **Graceful degradation everywhere.** Permission denied, subprocess timeouts, missing API key — all handled without crashing.
+---
 
 ## Git Workflow
 
 Every change starts on a branch. Nothing goes directly to main.
 
-### Branch naming
-
-Create a branch before starting any work:
-
 ```bash
 git checkout -b <type>/<short-description>
-```
-
-Branch type matches the commit prefix:
-
-| Type | Use |
-|---|---|
-| `feat/` | New feature or capability |
-| `fix/` | Bug fix |
-| `refactor/` | Restructure without behavior change |
-| `chore/` | Tooling, config, documentation |
-| `test/` | Tests |
-
-Examples:
-```
-feat/venv-setup-script
-fix/token-budget-early-exit
-refactor/capabilities-module
-chore/update-claude-md
-```
-
-### Commit messages
-
-Format: `<type>: <short description>`
-
-```
-feat: add parse_structure tool via tree-sitter
-fix: flush cache on context budget early exit
-refactor: extract token tracking into separate class
-chore: update CLAUDE.md with git workflow
-```
-
-One commit per logical unit of work, not one per file.
-
-### Merge procedure
-
-When the task is complete:
-
-```bash
+# ... work ...
 git checkout main
 git merge --no-ff <branch> -m "merge: <description>"
 git branch -d <branch>
 ```
 
-The `--no-ff` flag preserves branch history in the log even after merge. Delete the branch after merging to keep the branch list clean.
+| Type | Use |
+|---|---|
+| `feat/` | New feature |
+| `fix/` | Bug fix |
+| `refactor/` | No behavior change |
+| `chore/` | Tooling, docs, config |
+
+Commit format: `<type>: <short description>`
+
+---
+
+## Naming Conventions
+
+| Context | Convention | Example |
+|---|---|---|
+| Functions / variables | snake_case | `classify_files`, `dir_path` |
+| Classes | PascalCase | `_TokenTracker`, `_CacheManager` |
+| Constants | UPPER_SNAKE_CASE | `MAX_CONTEXT`, `CACHE_ROOT` |
+| Module files | snake_case | `ast_parser.py` |
+| CLI flags | kebab-case | `--clear-cache`, `--install-extras` |
+| Private functions | leading underscore | `_run_synthesis` |
+
+---
+
+## Documentation
+
+Wiki lives at `docs/wiki/` (gitignored — separate git repo).
+
+```bash
+# First time
+git clone ssh://git@forgejo-claude/archeious/luminos.wiki.git docs/wiki/
+# Returning
+git -C docs/wiki pull
+```
+
+Wiki: https://forgejo.labbity.unbiasedgeek.com/archeious/luminos/wiki
+
+---
+
+## Session Protocols
+
+See `~/.claude/CLAUDE.md`
+
+---
+
+## Session Log
+
+| Date | Summary |
+|---|---|
+| 2026-04-06 | Session 1: scan progress output, in-place per-file display, --exclude flag, Forgejo repo, PLAN.md, wiki setup, development practices |
+
+Full log: wiki — [Session Retrospectives](https://forgejo.labbity.unbiasedgeek.com/archeious/luminos/wiki/SessionRetrospectives)
