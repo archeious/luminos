@@ -3,7 +3,8 @@
 import os
 
 
-def build_tree(path, max_depth=3, show_hidden=False, _depth=0):
+def build_tree(path, max_depth=3, show_hidden=False, exclude=None, _depth=0):
+    exclude = exclude or []
     """Build a nested dict representing the directory tree with file sizes."""
     name = os.path.basename(path) or path
     node = {"name": name, "path": path, "type": "directory", "children": []}
@@ -17,10 +18,12 @@ def build_tree(path, max_depth=3, show_hidden=False, _depth=0):
     for entry in entries:
         if not show_hidden and entry.startswith("."):
             continue
+        if entry in exclude:
+            continue
         full = os.path.join(path, entry)
         if os.path.isdir(full):
             if _depth < max_depth:
-                child = build_tree(full, max_depth, show_hidden, _depth + 1)
+                child = build_tree(full, max_depth, show_hidden, exclude, _depth + 1)
                 node["children"].append(child)
             else:
                 node["children"].append({

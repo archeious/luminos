@@ -5,7 +5,7 @@ import os
 from datetime import datetime
 
 
-def find_recent_files(target, n=10, show_hidden=False):
+def find_recent_files(target, n=10, show_hidden=False, exclude=None):
     """Find the n most recently modified files using find and stat.
 
     Returns a list of dicts: {path, name, modified, modified_human}.
@@ -14,6 +14,9 @@ def find_recent_files(target, n=10, show_hidden=False):
     cmd = ["find", target, "-type", "f"]
     if not show_hidden:
         cmd.extend(["-not", "-path", "*/.*"])
+    for name in (exclude or []):
+        cmd.extend(["-not", "-path", f"*/{name}/*",
+                    "-not", "-path", f"*/{name}"])
     cmd.extend(["-printf", "%T@\t%p\n"])
 
     try:

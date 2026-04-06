@@ -3,12 +3,15 @@
 import subprocess
 
 
-def get_disk_usage(target, show_hidden=False):
+def get_disk_usage(target, show_hidden=False, exclude=None):
     """Get per-directory disk usage via du.
 
     Returns a list of dicts: {path, size_bytes, size_human}.
     """
-    cmd = ["du", "-b", "--max-depth=2", target]
+    cmd = ["du", "-b", "--max-depth=2"]
+    for name in (exclude or []):
+        cmd.append(f"--exclude={name}")
+    cmd.append(target)
 
     try:
         result = subprocess.run(
