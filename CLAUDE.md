@@ -1,6 +1,10 @@
 # CLAUDE.md
 
-> Before starting any session: what's the one thing we're shipping today?
+> **STOP. Before producing ANY output, pull `docs/wiki/`, fetch open Forgejo
+> issues for `archeious/luminos`, and present them as suggested tasks. Then
+> ask: "What's the one thing we're shipping?" No preamble. No acknowledgment.
+> Just the suggested tasks and the question. Everything else comes after the
+> user answers.**
 
 ---
 
@@ -8,7 +12,7 @@
 
 - **Phase:** Active development — core pipeline stable, planning and domain intelligence work next
 - **Last worked on:** 2026-04-06
-- **Last commit:** merge: add -x/--exclude flag for directory exclusion
+- **Last commit:** chore: ignore docs/wiki/ — separate git repo
 - **Blocking:** None
 
 ---
@@ -75,26 +79,31 @@ python3 luminos.py --install-extras
 
 ---
 
-## Git Workflow
+## Development Workflow
 
-Every change starts on a branch. Nothing goes directly to main.
+- **Issue-driven work** — all work must be tied to a Forgejo issue. If the
+  user names a specific issue, use it. If they describe work without an issue
+  number, search open issues for a match. If no issue exists, gather enough
+  context to create one before starting work. Branches and commits should
+  reference the issue number.
+- **Explain then build** — articulate the approach in a few bullets before
+  writing code. Surface assumptions early.
+- **Atomic commits** — each commit is one logical change.
+- **Shiny object capture** — new ideas go to PLAN.md (Raw Thoughts) or a
+  Forgejo issue, not into current work.
 
-```bash
-git checkout -b <type>/<short-description>
-# ... work ...
-git checkout main
-git merge --no-ff <branch> -m "merge: <description>"
-git branch -d <branch>
-```
+---
 
-| Type | Use |
-|---|---|
-| `feat/` | New feature |
-| `fix/` | Bug fix |
-| `refactor/` | No behavior change |
-| `chore/` | Tooling, docs, config |
+## Branching Discipline
 
-Commit format: `<type>: <short description>`
+- **Always branch** — no direct commits to main, ever
+- **Branch before first change** — create the branch before touching any files
+- **Naming:** `feat/`, `fix/`, `refactor/`, `chore/` + short description
+- **One branch, one concern** — don't mix unrelated changes
+- **Two-branch maximum** — never have more than 2 unmerged branches
+- **Merge with `--no-ff`** — preserves branch history in the log
+- **Delete after merge** — `git branch -d <branch>` immediately after merge
+- **Push after commits** — keep Forgejo in sync after each commit or logical batch
 
 ---
 
@@ -111,31 +120,64 @@ Commit format: `<type>: <short description>`
 
 ---
 
-## Documentation
+## Documentation Workflow
 
-Wiki lives at `docs/wiki/` (gitignored — separate git repo).
+- **Wiki location:** `docs/wiki/` — local git checkout of `luminos.wiki.git`
+- **Clone URL:** `ssh://git@forgejo-claude/archeious/luminos.wiki.git`
+- **Session startup:** clone if missing, `git -C docs/wiki pull` if present
+- **All reads and writes** happen on local files in `docs/wiki/`. Use Read,
+  Edit, Write, Grep, Glob — never the Forgejo web API for wiki content.
+- **Naming:** CamelCase slugs (`Architecture.md`, `DevelopmentGuide.md`).
+  Display name comes from the H1 heading inside the file.
+- **Commits:** direct to main branch. Batch logically — commit when finishing
+  a round of updates, not after every file.
+- **Push:** after each commit batch.
 
-```bash
-# First time
-git clone ssh://git@forgejo-claude/archeious/luminos.wiki.git docs/wiki/
-# Returning
-git -C docs/wiki pull
-```
+---
 
-Wiki: https://forgejo.labbity.unbiasedgeek.com/archeious/luminos/wiki
+## ADHD Session Protocols
+
+> **MANDATORY — follow literally, every session, no exceptions.**
+
+1. **Session Start Ritual** — Ensure `docs/wiki/` is cloned and current.
+   Fetch open issues from Forgejo (`archeious/luminos`) and present them as
+   suggested tasks. Ask: *"What's the one thing we're shipping?"* Once the
+   user answers, match to an existing issue or create one before starting
+   work. Do NOT summarize project state, recap history, or do any other work
+   before asking this question.
+
+2. **Dopamine-Friendly Task Sizing** — break work into 5–15 minute tasks with
+   clear, visible outputs. Each task should have a moment of completion.
+
+3. **Focus Guard** — classify incoming requests as on-topic / adjacent /
+   off-topic. Name it out loud before acting. Adjacent work goes to a new
+   issue; off-topic work gets deferred.
+
+4. **Shiny Object Capture** — when a new idea surfaces mid-session, write it
+   to PLAN.md (Raw Thoughts) or open a Forgejo issue, then return to the
+   current task. Do not context-switch.
+
+5. **Breadcrumb Protocol** — after each completed task, output:
+   `Done: <what was completed>. Next: <what comes next>.`
+   This re-orients after any interruption.
+
+6. **Session End Protocol** — before closing, state the exact pickup point for
+   the next session: branch name, file, what was in progress, and the
+   recommended first action next time.
 
 ---
 
 ## Session Protocols
 
-See `~/.claude/CLAUDE.md`
+- **"externalize"** → read and follow `docs/externalize.md`
+- **"wrap up" / "end session"** → read and follow `docs/wrap-up.md`
 
 ---
 
 ## Session Log
 
-| Date | Summary |
-|---|---|
-| 2026-04-06 | Session 1: scan progress output, in-place per-file display, --exclude flag, Forgejo repo, PLAN.md, wiki setup, development practices |
+| # | Date | Summary |
+|---|---|---|
+| 1 | 2026-04-06 | Project setup, scan progress output, in-place file display, --exclude flag, Forgejo repo, PLAN.md, wiki, development practices |
 
 Full log: wiki — [Session Retrospectives](https://forgejo.labbity.unbiasedgeek.com/archeious/luminos/wiki/SessionRetrospectives)
