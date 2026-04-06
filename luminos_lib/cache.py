@@ -126,6 +126,12 @@ class _CacheManager:
             return f"Error: missing required fields: {', '.join(sorted(missing))}"
         if "content" in data or "contents" in data or "raw" in data:
             return "Error: cache entries must not contain raw file contents."
+        if "confidence" in data:
+            c = data["confidence"]
+            if not isinstance(c, (int, float)) or not (0.0 <= c <= 1.0):
+                return "Error: confidence must be a float between 0.0 and 1.0"
+        if "confidence_reason" in data and not isinstance(data["confidence_reason"], str):
+            return "Error: confidence_reason must be a string"
         try:
             with open(cache_file, "w") as f:
                 json.dump(data, f, indent=2)
