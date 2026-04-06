@@ -34,10 +34,11 @@ def _count_lines(filepath):
     return 0
 
 
-def detect_languages(classified_files):
+def detect_languages(classified_files, on_file=None):
     """Detect languages present and count lines of code per language.
 
     Returns (languages_set, loc_by_language).
+    on_file(path) is called per source file, if provided.
     """
     source_files = [f for f in classified_files if f["category"] == "source"]
     languages = set()
@@ -49,12 +50,17 @@ def detect_languages(classified_files):
         languages.add(lang)
         lines = _count_lines(f["path"])
         loc[lang] = loc.get(lang, 0) + lines
+        if on_file:
+            on_file(f["path"])
 
     return sorted(languages), loc
 
 
-def find_large_files(classified_files):
-    """Find files that are unusually large (>1000 lines or >10MB)."""
+def find_large_files(classified_files, on_file=None):
+    """Find files that are unusually large (>1000 lines or >10MB).
+
+    on_file(path) is called per source file checked, if provided.
+    """
     source_files = [f for f in classified_files if f["category"] == "source"]
     large = []
 
@@ -68,5 +74,7 @@ def find_large_files(classified_files):
         if reasons:
             large.append({"path": f["path"], "name": f["name"],
                           "reasons": reasons})
+        if on_file:
+            on_file(f["path"])
 
     return large
