@@ -19,25 +19,31 @@ def scan(target, depth=3, show_hidden=False):
     """Run all analyses on the target directory and return a report dict."""
     report = {}
 
+    print(f"  [scan] Building directory tree (depth={depth})...", file=sys.stderr)
     tree = build_tree(target, max_depth=depth, show_hidden=show_hidden)
     report["tree"] = tree
     report["tree_rendered"] = render_tree(tree)
 
+    print("  [scan] Classifying files...", file=sys.stderr)
     classified = classify_files(target, show_hidden=show_hidden)
     report["file_categories"] = summarize_categories(classified)
     report["classified_files"] = classified
 
+    print("  [scan] Detecting languages and counting lines...", file=sys.stderr)
     languages, loc = detect_languages(classified)
     report["languages"] = languages
     report["lines_of_code"] = loc
     report["large_files"] = find_large_files(classified)
 
+    print("  [scan] Finding recently modified files...", file=sys.stderr)
     report["recent_files"] = find_recent_files(target, show_hidden=show_hidden)
 
+    print("  [scan] Calculating disk usage...", file=sys.stderr)
     usage = get_disk_usage(target, show_hidden=show_hidden)
     report["disk_usage"] = usage
     report["top_directories"] = top_directories(usage, n=5)
 
+    print("  [scan] Base scan complete.", file=sys.stderr)
     return report
 
 
