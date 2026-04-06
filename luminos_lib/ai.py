@@ -643,14 +643,16 @@ def _call_api_streaming(client, system, messages, tools, tracker):
 # Directory discovery
 # ---------------------------------------------------------------------------
 
-def _discover_directories(target, show_hidden=False):
+def _discover_directories(target, show_hidden=False, exclude=None):
     """Walk the target and return all directories sorted leaves-first."""
+    extra = set(exclude or [])
     dirs = []
     target_real = os.path.realpath(target)
     for root, subdirs, _files in os.walk(target_real, topdown=True):
         subdirs[:] = [
             d for d in subdirs
             if not _should_skip_dir(d)
+            and d not in extra
             and (show_hidden or not d.startswith("."))
         ]
         dirs.append(root)
@@ -1001,7 +1003,7 @@ def _synthesize_from_cache(cache):
 # ---------------------------------------------------------------------------
 
 def _run_investigation(client, target, report, show_hidden=False,
-                       fresh=False, verbose=False):
+                       fresh=False, verbose=False, exclude=None):
     """Orchestrate the multi-pass investigation. Returns (brief, detailed, flags)."""
     investigation_id, is_new = _get_investigation_id(target, fresh=fresh)
     cache = _CacheManager(investigation_id, target)
@@ -1014,7 +1016,8 @@ def _run_investigation(client, target, report, show_hidden=False,
           f"{'' if is_new else ' (resumed)'}", file=sys.stderr)
     print(f"  [AI] Cache: {cache.root}/", file=sys.stderr)
 
-    all_dirs = _discover_directories(target, show_hidden=show_hidden)
+    all_dirs = _discover_directories(target, show_hidden=show_hidden,
+                                     exclude=exclude)
 
     to_investigate = []
     cached_count = 0
@@ -1087,7 +1090,8 @@ def _run_investigation(client, target, report, show_hidden=False,
 # Public interface
 # ---------------------------------------------------------------------------
 
-def analyze_directory(report, target, verbose_tools=False, fresh=False):
+def analyze_directory(report, target, verbose_tools=False, fresh=False,
+                      exclude=None):
     """Run AI analysis on the directory. Returns (brief, detailed, flags).
 
     Returns ("", "", []) if the API key is missing or dependencies are not met.
@@ -1106,6 +1110,7 @@ def analyze_directory(report, target, verbose_tools=False, fresh=False):
     try:
         brief, detailed, flags = _run_investigation(
             client, target, report, fresh=fresh, verbose=verbose_tools,
+            exclude=exclude,
         )
     except Exception as e:
         print(f"Warning: AI analysis failed: {e}", file=sys.stderr)

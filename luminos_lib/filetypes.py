@@ -86,7 +86,8 @@ def _classify_one(filepath):
     return "unknown", desc
 
 
-def classify_files(target, show_hidden=False, on_file=None):
+def classify_files(target, show_hidden=False, exclude=None, on_file=None):
+    exclude = exclude or []
     """Walk the target directory and classify every file.
 
     Returns a list of dicts: {path, name, category, size, description}.
@@ -94,8 +95,10 @@ def classify_files(target, show_hidden=False, on_file=None):
     """
     results = []
     for root, dirs, files in os.walk(target):
+        dirs[:] = [d for d in dirs
+                   if d not in exclude
+                   and (show_hidden or not d.startswith("."))]
         if not show_hidden:
-            dirs[:] = [d for d in dirs if not d.startswith(".")]
             files = [f for f in files if not f.startswith(".")]
         for fname in files:
             full = os.path.join(root, fname)

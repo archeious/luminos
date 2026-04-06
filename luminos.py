@@ -38,17 +38,21 @@ def _progress(label):
     return on_file, finish
 
 
-def scan(target, depth=3, show_hidden=False):
+def scan(target, depth=3, show_hidden=False, exclude=None):
     """Run all analyses on the target directory and return a report dict."""
     report = {}
 
+    exclude = exclude or []
+
     print(f"  [scan] Building directory tree (depth={depth})...", file=sys.stderr)
-    tree = build_tree(target, max_depth=depth, show_hidden=show_hidden)
+    tree = build_tree(target, max_depth=depth, show_hidden=show_hidden,
+                      exclude=exclude)
     report["tree"] = tree
     report["tree_rendered"] = render_tree(tree)
 
     on_file, finish = _progress("Classifying files")
-    classified = classify_files(target, show_hidden=show_hidden, on_file=on_file)
+    classified = classify_files(target, show_hidden=show_hidden,
+                                exclude=exclude, on_file=on_file)
     finish()
     report["file_categories"] = summarize_categories(classified)
     report["classified_files"] = classified
@@ -64,10 +68,11 @@ def scan(target, depth=3, show_hidden=False):
     finish()
 
     print("  [scan] Finding recently modified files...", file=sys.stderr)
-    report["recent_files"] = find_recent_files(target, show_hidden=show_hidden)
+    report["recent_files"] = find_recent_files(target, show_hidden=show_hidden,
+                                               exclude=exclude)
 
     print("  [scan] Calculating disk usage...", file=sys.stderr)
-    usage = get_disk_usage(target, show_hidden=show_hidden)
+    usage = get_disk_usage(target, show_hidden=show_hidden, exclude=exclude)
     report["disk_usage"] = usage
     report["top_directories"] = top_directories(usage, n=5)
 
@@ -101,6 +106,10 @@ def main():
                         help="Force a new AI investigation (ignore cached results)")
     parser.add_argument("--install-extras", action="store_true",
                         help="Show status of optional AI dependencies")
+    parser.add_argument("-x", "--exclude", metavar="DIR", action="append",
+                        default=[],
+                        help="Exclude a directory name from scan and analysis "
+                             "(repeatable, e.g. -x .git -x node_modules)")
 
     args = parser.parse_args()
 
@@ -126,17 +135,22 @@ def main():
               file=sys.stderr)
         sys.exit(1)
 
+    if args.exclude:
+        print(f"  [scan] Excluding: {', '.join(args.exclude)}", file=sys.stderr)
+
     if args.watch:
         watch_loop(target, depth=args.depth, show_hidden=args.all,
                    json_output=args.json_output)
         return
 
-    report = scan(target, depth=args.depth, show_hidden=args.all)
+    report = scan(target, depth=args.depth, show_hidden=args.all,
+                  exclude=args.exclude)
 
     flags = []
     if args.ai:
         from luminos_lib.ai import analyze_directory
-        brief, detailed, flags = analyze_directory(report, target, fresh=args.fresh)
+        brief, detailed, flags = analyze_directory(
+            report, target, fresh=args.fresh, exclude=args.exclude)
         report["ai_brief"] = brief
         report["ai_detailed"] = detailed
         report["flags"] = flags
