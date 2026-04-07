@@ -10,9 +10,9 @@
 
 ## Current Project State
 
-- **Phase:** Active development — Phase 2 (survey pass) and Phase 2.5 (context budget) complete; Phase 3 (investigation planning) ready to start
+- **Phase:** Active development — Phase 2 + 2.5 complete; documentation deep dive complete (#53); Phase 3 (investigation planning) ready to start
 - **Last worked on:** 2026-04-06
-- **Last commit:** merge: feat/issue-44-context-budget (#44)
+- **Last commit:** merge: docs/issue-53-onboarding-internals (#53)
 - **Blocking:** None
 
 ---
@@ -189,8 +189,8 @@ python3 luminos.py --install-extras
 
 | # | Date | Summary |
 |---|---|---|
-| 2 | 2026-04-06 | Forgejo milestones (9), issues (36), project board, Gitea MCP installed and configured globally |
 | 3 | 2026-04-06 | Phase 1 complete (#1–#3), MCP backend architecture design (Part 10, Phase 3.5), issues #38–#40 opened |
 | 4 | 2026-04-06 | Phase 2 + 2.5 complete (#4–#7, #42, #44), filetype classifier rebuild, context budget metric fix, 8 PRs merged, issues #46/#48/#49/#51 opened |
+| 5 | 2026-04-06 | Documentation deep dive (#53): new Internals.md code tour, Architecture cache fix, Roadmap replaced with pointer, PLAN.md status snapshot |
 
 Full log: wiki — [Session Retrospectives](https://forgejo.labbity.unbiasedgeek.com/archeious/luminos/wiki/SessionRetrospectives)
