@@ -55,11 +55,23 @@ Output this as plain text before tool calls, not as a tool call itself.
 
 ## Cache Schemas
 File: {{path, relative_path, size_bytes, category, summary, notable,
-  notable_reason, cached_at}}
+  notable_reason, confidence, confidence_reason, cached_at}}
 Dir: {{path, relative_path, child_count, summary, dominant_category,
-  notable_files, cached_at}}
+  notable_files, confidence, confidence_reason, cached_at}}
 
 category values: source, config, data, document, media, archive, unknown
+
+## Confidence
+Always set `confidence` (0.0–1.0) on every write_cache call:
+  high   ≥ 0.8  — you read the file/dir fully and understood it clearly
+  medium 0.5–0.8 — partial read, ambiguous content, or uncertain purpose
+  low    < 0.5  — binary/unreadable, missing context, or genuinely unclear
+
+Set `confidence_reason` whenever confidence is below 0.7. Explain briefly
+why you are uncertain (e.g. "binary file, content not readable",
+"no README or docstring, purpose inferred from filename only",
+"file truncated at max_bytes"). Do NOT set confidence_reason when
+confidence is 0.7 or above.
 
 ## Context
 {context}
