@@ -10,9 +10,9 @@
 
 ## Current Project State
 
-- **Phase:** Active development — issue tracking and MCP configured, Phase 1 (confidence tracking) ready to start
+- **Phase:** Active development — Phase 1 (confidence tracking) complete, Phase 2 (survey pass) ready to start
 - **Last worked on:** 2026-04-06
-- **Last commit:** chore: update CLAUDE.md for session 2
+- **Last commit:** merge: feat/issue-3-low-confidence-entries (#3)
 - **Blocking:** None
 
 ---
@@ -185,5 +185,6 @@ python3 luminos.py --install-extras
 |---|---|---|
 | 1 | 2026-04-06 | Project setup, scan progress output, in-place file display, --exclude flag, Forgejo repo, PLAN.md, wiki, development practices |
 | 2 | 2026-04-06 | Forgejo milestones (9), issues (36), project board, Gitea MCP installed and configured globally |
+| 3 | 2026-04-06 | Phase 1 complete (#1–#3), MCP backend architecture design (Part 10, Phase 3.5), issues #38–#40 opened |
 
 Full log: wiki — [Session Retrospectives](https://forgejo.labbity.unbiasedgeek.com/archeious/luminos/wiki/SessionRetrospectives)
