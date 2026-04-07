@@ -753,8 +753,54 @@ def _get_child_summaries(dir_path, cache):
     return "\n".join(parts) if parts else "(none — this is a leaf directory)"
 
 
+_SURVEY_CONFIDENCE_THRESHOLD = 0.5
+_PROTECTED_DIR_TOOLS = {"submit_report"}
+
+
+def _format_survey_block(survey):
+    """Render survey output as a labeled text block for the dir prompt."""
+    if not survey:
+        return "(no survey available)"
+    lines = [
+        f"Description: {survey.get('description', '')}",
+        f"Approach: {survey.get('approach', '')}",
+    ]
+    notes = survey.get("domain_notes", "")
+    if notes:
+        lines.append(f"Domain notes: {notes}")
+    relevant = survey.get("relevant_tools") or []
+    if relevant:
+        lines.append(f"Relevant tools (lean on these): {', '.join(relevant)}")
+    skip = survey.get("skip_tools") or []
+    if skip:
+        lines.append(f"Skip tools (already removed from your toolbox): "
+                     f"{', '.join(skip)}")
+    return "\n".join(lines)
+
+
+def _filter_dir_tools(survey):
+    """Return _DIR_TOOLS with skip_tools removed, gated on confidence.
+
+    - Returns full list if survey is None or confidence < threshold.
+    - Always preserves control-flow tools in _PROTECTED_DIR_TOOLS.
+    - Tool names in skip_tools that don't match anything are silently ignored.
+    """
+    if not survey:
+        return list(_DIR_TOOLS)
+    try:
+        confidence = float(survey.get("confidence", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        confidence = 0.0
+    if confidence < _SURVEY_CONFIDENCE_THRESHOLD:
+        return list(_DIR_TOOLS)
+    skip = set(survey.get("skip_tools") or []) - _PROTECTED_DIR_TOOLS
+    if not skip:
+        return list(_DIR_TOOLS)
+    return [t for t in _DIR_TOOLS if t["name"] not in skip]
+
+
 def _run_dir_loop(client, target, cache, tracker, dir_path, max_turns=14,
-                  verbose=False):
+                  verbose=False, survey=None):
     """Run an isolated agent loop for a single directory."""
     dir_rel = os.path.relpath(dir_path, target)
     if dir_rel == ".":
@@ -762,6 +808,8 @@ def _run_dir_loop(client, target, cache, tracker, dir_path, max_turns=14,
 
     context = _build_dir_context(dir_path)
     child_summaries = _get_child_summaries(dir_path, cache)
+    survey_context = _format_survey_block(survey)
+    dir_tools = _filter_dir_tools(survey)
 
     system = _DIR_SYSTEM_PROMPT.format(
         dir_path=dir_path,
@@ -769,6 +817,7 @@ def _run_dir_loop(client, target, cache, tracker, dir_path, max_turns=14,
         max_turns=max_turns,
         context=context,
         child_summaries=child_summaries,
+        survey_context=survey_context,
     )
 
     messages = [
@@ -844,7 +893,7 @@ def _run_dir_loop(client, target, cache, tracker, dir_path, max_turns=14,
 
         try:
             content_blocks, usage = _call_api_streaming(
-                client, system, messages, _DIR_TOOLS, tracker,
+                client, system, messages, dir_tools, tracker,
             )
         except anthropic.APIError as e:
             print(f"  [AI]   API error: {e}", file=sys.stderr)
@@ -1229,6 +1278,7 @@ def _run_investigation(client, target, report, show_hidden=False,
 
         summary = _run_dir_loop(
             client, target, cache, tracker, dir_path, verbose=verbose,
+            survey=survey,
         )
 
         if summary and not cache.has_entry("dir", dir_path):
