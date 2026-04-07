@@ -8,7 +8,11 @@ import shutil
 import sys
 
 from luminos_lib.tree import build_tree, render_tree
-from luminos_lib.filetypes import classify_files, summarize_categories
+from luminos_lib.filetypes import (
+    classify_files,
+    summarize_categories,
+    survey_signals,
+)
 from luminos_lib.code import detect_languages, find_large_files
 from luminos_lib.recency import find_recent_files
 from luminos_lib.disk import get_disk_usage, top_directories
@@ -56,6 +60,7 @@ def scan(target, depth=3, show_hidden=False, exclude=None):
     finish()
     report["file_categories"] = summarize_categories(classified)
     report["classified_files"] = classified
+    report["survey_signals"] = survey_signals(classified)
 
     on_file, finish = _progress("Counting lines")
     languages, loc = detect_languages(classified, on_file=on_file)

@@ -128,3 +128,64 @@ def summarize_categories(classified):
         cat = f["category"]
         summary[cat] = summary.get(cat, 0) + 1
     return summary
+
+
+_SURVEY_TOP_N = 20
+_SURVEY_DESC_TRUNCATE = 80
+
+
+def survey_signals(classified, max_samples=20):
+    """Return raw, unbucketed signals for the AI survey pass.
+
+    Unlike `summarize_categories`, which collapses files into a small
+    biased taxonomy, this exposes the primary signals so the survey
+    LLM can characterize the target without being misled by the
+    classifier's source-code bias.
+
+    See #42 for the rationale and #48 for the unit-of-analysis
+    limitation: the unit here is still "file" — containers like mbox,
+    SQLite, and zip will under-count, while dense file collections like
+    Maildir will over-count.
+
+    Returns a dict with:
+      total_files       — total count
+      extension_histogram — {ext: count}, top _SURVEY_TOP_N by count
+      file_descriptions — {description: count}, top _SURVEY_TOP_N by count
+      filename_samples  — up to max_samples filenames, evenly drawn
+    """
+    total = len(classified)
+
+    ext_counts = {}
+    desc_counts = {}
+    for f in classified:
+        ext = os.path.splitext(f.get("name", ""))[1].lower() or "(none)"
+        ext_counts[ext] = ext_counts.get(ext, 0) + 1
+
+        desc = (f.get("description") or "").strip()
+        if desc:
+            if len(desc) > _SURVEY_DESC_TRUNCATE:
+                desc = desc[:_SURVEY_DESC_TRUNCATE] + "..."
+            desc_counts[desc] = desc_counts.get(desc, 0) + 1
+
+    def _top(d):
+        items = sorted(d.items(), key=lambda kv: (-kv[1], kv[0]))
+        return dict(items[:_SURVEY_TOP_N])
+
+    if total > 0 and max_samples > 0:
+        if total <= max_samples:
+            samples = [f.get("name", "") for f in classified]
+        else:
+            stride = total / max_samples
+            samples = [
+                classified[int(i * stride)].get("name", "")
+                for i in range(max_samples)
+            ]
+    else:
+        samples = []
+
+    return {
+        "total_files": total,
+        "extension_histogram": _top(ext_counts),
+        "file_descriptions": _top(desc_counts),
+        "filename_samples": samples,
+    }

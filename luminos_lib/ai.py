@@ -996,21 +996,44 @@ def _block_to_dict(block):
 # Synthesis pass
 # ---------------------------------------------------------------------------
 
+def _format_survey_signals(signals):
+    """Render the survey_signals dict as a labeled text block."""
+    if not signals or not signals.get("total_files"):
+        return "(no files classified)"
+
+    lines = [f"Total files: {signals.get('total_files', 0)}", ""]
+
+    ext_hist = signals.get("extension_histogram") or {}
+    if ext_hist:
+        lines.append("Extensions (top, by count):")
+        for ext, n in ext_hist.items():
+            lines.append(f"  {ext}: {n}")
+        lines.append("")
+
+    descs = signals.get("file_descriptions") or {}
+    if descs:
+        lines.append("file --brief output (top, by count):")
+        for desc, n in descs.items():
+            lines.append(f"  {desc}: {n}")
+        lines.append("")
+
+    samples = signals.get("filename_samples") or []
+    if samples:
+        lines.append("Filename samples (evenly drawn):")
+        for name in samples:
+            lines.append(f"  {name}")
+
+    return "\n".join(lines).rstrip()
+
+
 def _run_survey(client, target, report, tracker, max_turns=3, verbose=False):
     """Run the reconnaissance survey pass.
 
     Returns a survey dict on success, or None on failure / out-of-turns.
     Survey is advisory — callers must treat None as "no survey context".
     """
-    categories = report.get("file_categories", {}) or {}
-    if categories:
-        ftd_lines = [
-            f"  {cat}: {n}"
-            for cat, n in sorted(categories.items(), key=lambda kv: -kv[1])
-        ]
-        file_type_distribution = "\n".join(ftd_lines)
-    else:
-        file_type_distribution = "  (no files classified)"
+    signals = report.get("survey_signals") or {}
+    survey_signals_text = _format_survey_signals(signals)
 
     try:
         tree_node = build_tree(target, max_depth=2)
@@ -1023,7 +1046,7 @@ def _run_survey(client, target, report, tracker, max_turns=3, verbose=False):
 
     system = _SURVEY_SYSTEM_PROMPT.format(
         target=target,
-        file_type_distribution=file_type_distribution,
+        survey_signals=survey_signals_text,
         tree_preview=tree_preview,
         available_tools=available_tools,
     )

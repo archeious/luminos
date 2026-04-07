@@ -131,17 +131,22 @@ Answer three questions about the target: {target}
 ## Inputs
 You have exactly two signals. Do not ask for more.
 
-File type distribution (counts by category):
-{file_type_distribution}
+File-level signals (raw, unbucketed):
+{survey_signals}
 
-IMPORTANT: the file type distribution is produced by a classifier
-that is biased toward source code. Its categories are: source,
-config, data, document, media, archive, unknown. It has NO concept
-of mail, notebooks, calendars, contacts, ledgers, photo libraries,
-or other personal-data domains — anything text-shaped tends to be
-labeled `source` even when it is not code. If the tree preview
-suggests a non-code target, trust the tree over the histogram and
-say so in `domain_notes`.
+These signals are intentionally raw. The extension histogram and
+the `file --brief` descriptions reflect what is actually on disk,
+without any taxonomy collapsing distinct content into one bucket.
+Use them together: an extension alone can mislead (`.txt` could be
+notes, logs, or message bodies); the `file` command output and
+filename samples disambiguate.
+
+Note on units: each signal counts filesystem files. Some targets
+have a different natural unit — a Maildir is one logical mailbox
+with thousands of message files; an mbox is one file containing
+many messages; an archive is one file containing many entries. If
+the signals point at a container shape, name it in `description`
+and `domain_notes` even though the count is in files.
 
 Top-level tree (2 levels deep):
 {tree_preview}
