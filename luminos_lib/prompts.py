@@ -131,6 +131,15 @@ You have exactly two signals. Do not ask for more.
 File type distribution (counts by category):
 {file_type_distribution}
 
+IMPORTANT: the file type distribution is produced by a classifier
+that is biased toward source code. Its categories are: source,
+config, data, document, media, archive, unknown. It has NO concept
+of mail, notebooks, calendars, contacts, ledgers, photo libraries,
+or other personal-data domains — anything text-shaped tends to be
+labeled `source` even when it is not code. If the tree preview
+suggests a non-code target, trust the tree over the histogram and
+say so in `domain_notes`.
+
 Top-level tree (2 levels deep):
 {tree_preview}
 
