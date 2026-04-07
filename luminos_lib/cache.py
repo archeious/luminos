@@ -187,3 +187,15 @@ class _CacheManager:
         except OSError:
             pass
         return result
+
+    def low_confidence_entries(self, threshold=0.7):
+        """Return all file and dir cache entries with confidence below threshold.
+
+        Entries missing a confidence field are included — they are unrated and
+        therefore untrusted. Results are sorted ascending by confidence so the
+        least-confident entries come first.
+        """
+        entries = self.read_all_entries("file") + self.read_all_entries("dir")
+        low = [e for e in entries if e.get("confidence", 0.0) < threshold]
+        low.sort(key=lambda e: e.get("confidence", 0.0))
+        return low

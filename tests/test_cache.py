@@ -198,6 +198,56 @@ class TestListEntries(unittest.TestCase):
         self.assertIsInstance(result[0], dict)
 
 
+class TestLowConfidenceEntries(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.cm = _make_manager(self.tmpdir)
+
+    def test_returns_entries_below_threshold(self):
+        self.cm.write_entry("file", "/tmp/a.py", _file_entry(path="/tmp/a.py", relative_path="a.py", confidence=0.4))
+        self.cm.write_entry("file", "/tmp/b.py", _file_entry(path="/tmp/b.py", relative_path="b.py", confidence=0.9))
+        result = self.cm.low_confidence_entries()
+        paths = [e["relative_path"] for e in result]
+        self.assertIn("a.py", paths)
+        self.assertNotIn("b.py", paths)
+
+    def test_excludes_entries_at_threshold(self):
+        self.cm.write_entry("file", "/tmp/c.py", _file_entry(path="/tmp/c.py", relative_path="c.py", confidence=0.7))
+        result = self.cm.low_confidence_entries()
+        self.assertEqual(result, [])
+
+    def test_includes_entries_missing_confidence(self):
+        self.cm.write_entry("file", "/tmp/d.py", _file_entry(path="/tmp/d.py", relative_path="d.py"))
+        result = self.cm.low_confidence_entries()
+        paths = [e["relative_path"] for e in result]
+        self.assertIn("d.py", paths)
+
+    def test_includes_dir_entries(self):
+        self.cm.write_entry("dir", "/tmp/mydir", _dir_entry(path="/tmp/mydir", relative_path="mydir", confidence=0.3))
+        result = self.cm.low_confidence_entries()
+        paths = [e["relative_path"] for e in result]
+        self.assertIn("mydir", paths)
+
+    def test_sorted_ascending_by_confidence(self):
+        self.cm.write_entry("file", "/tmp/e.py", _file_entry(path="/tmp/e.py", relative_path="e.py", confidence=0.6))
+        self.cm.write_entry("file", "/tmp/f.py", _file_entry(path="/tmp/f.py", relative_path="f.py", confidence=0.2))
+        self.cm.write_entry("file", "/tmp/g.py", _file_entry(path="/tmp/g.py", relative_path="g.py", confidence=0.4))
+        result = self.cm.low_confidence_entries()
+        scores = [e["confidence"] for e in result]
+        self.assertEqual(scores, sorted(scores))
+
+    def test_custom_threshold(self):
+        self.cm.write_entry("file", "/tmp/h.py", _file_entry(path="/tmp/h.py", relative_path="h.py", confidence=0.5))
+        self.cm.write_entry("file", "/tmp/i.py", _file_entry(path="/tmp/i.py", relative_path="i.py", confidence=0.8))
+        result = self.cm.low_confidence_entries(threshold=0.6)
+        paths = [e["relative_path"] for e in result]
+        self.assertIn("h.py", paths)
+        self.assertNotIn("i.py", paths)
+
+    def test_empty_cache_returns_empty_list(self):
+        self.assertEqual(self.cm.low_confidence_entries(), [])
+
+
 class TestGetInvestigationId(unittest.TestCase):
     def test_same_target_same_id(self):
         with tempfile.TemporaryDirectory() as d:
