@@ -1,5 +1,31 @@
 # Luminos — Evolution Plan
 
+> **Status snapshot (kept in sync with closed issues; for the canonical
+> live view see [open issues](https://forgejo.labbity.unbiasedgeek.com/archeious/luminos/issues)
+> and the wiki [Roadmap](https://forgejo.labbity.unbiasedgeek.com/archeious/luminos/wiki/Roadmap)).**
+>
+> | Phase | Status |
+> |---|---|
+> | 1 — Confidence tracking | ✅ shipped |
+> | 2 — Survey pass | ✅ shipped |
+> | 2.5 — Context budget reliability (#44) | ✅ shipped |
+> | 3 — Investigation planning | ⏳ next |
+> | 3.5 — MCP backend abstraction (#39) | planned |
+> | 4 — External knowledge tools | planned |
+> | 4.5 — Unit of analysis (#48) | planned |
+> | 5 — Scale-tiered synthesis | planned |
+> | 6 — Multi-level synthesis | planned |
+> | 7 — Hypothesis-driven synthesis | planned |
+> | 8 — Refinement pass | planned |
+> | 9 — Dynamic report structure | planned |
+>
+> **Heads up on the File Map below:** the original plan called for a new
+> `luminos_lib/domain.py` to host the survey/plan logic. In practice the
+> survey pass landed inside `ai.py` (`_run_survey`, `_format_survey_block`,
+> `_filter_dir_tools`) and `domain.py` was never created. Phase 3's
+> planning pass will probably follow the same pattern unless `ai.py`
+> grows large enough to justify a split.
+
 ## Core Philosophy
 
 The current design is a **pipeline with AI steps**. Even though it uses an
@@ -636,9 +662,9 @@ architecture. The migration pain is intentional and instructive.
 
 | File | Changes |
 |---|---|
-| `luminos_lib/domain.py` | **new** — survey pass, plan pass, profile-free detection |
-| `luminos_lib/prompts.py` | survey prompt, planning prompt, refinement prompt, updated dir/synthesis prompts |
-| `luminos_lib/ai.py` | survey, planning, external tools, tiered synthesis, multi-level grouping, refinement, confidence-aware cache writes |
+| ~~`luminos_lib/domain.py`~~ | ~~new — survey pass, plan pass~~ — **never created**; survey logic landed in `ai.py` instead |
+| `luminos_lib/prompts.py` | survey prompt ✅, planning prompt, refinement prompt, updated dir/synthesis prompts |
+| `luminos_lib/ai.py` | survey ✅, planning, external tools, tiered synthesis, multi-level grouping, refinement, confidence-aware cache writes |
 | `luminos_lib/cache.py` | confidence fields in schemas, low-confidence query |
 | `luminos_lib/report.py` | dynamic field rendering, domain-appropriate sections |
 | `luminos.py` | --refine, --no-external, --refine-depth flags; wire survey into scan |
