@@ -10,9 +10,9 @@
 
 ## Current Project State
 
-- **Phase:** Active development — Phase 1 audited (only #54 remains); Phase 2 + 2.5 complete; Phase 3 (investigation planning) ready to start
+- **Phase:** Active development — Phase 1 + 2 + 2.5 complete; Phase 3 (investigation planning) ready to start
 - **Last worked on:** 2026-04-07
-- **Last commit:** chore: update CLAUDE.md for session 6
+- **Last commit:** merge: fix/issue-54-write-cache-tool-desc
 - **Blocking:** None
 
 ---
@@ -108,8 +108,8 @@ only).
 
 | # | Date | Summary |
 |---|---|---|
-| 5 | 2026-04-06 | Documentation deep dive (#53): new Internals.md code tour, Architecture cache fix, Roadmap replaced with pointer, PLAN.md status snapshot |
 | 6 | 2026-04-07 | Extracted shared workflow/branching/protocols from project CLAUDE.md to global `~/.claude/CLAUDE.md`; moved externalize.md and wrap-up.md to `~/.claude/protocols/` |
 | 7 | 2026-04-07 | Phase 1 audit — closed #1 (only #54 remains); gitea MCP credential overhaul: dedicated `claude-code` Forgejo user, admin on luminos, write+delete verified end-to-end |
+| 8 | 2026-04-07 | Closed #54 — added confidence/confidence_reason to write_cache tool schema description; Phase 1 milestone now 4/4 complete |
 
 Full log: wiki — [Session Retrospectives](https://forgejo.labbity.unbiasedgeek.com/archeious/luminos/wiki/SessionRetrospectives)
