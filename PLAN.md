@@ -541,6 +541,15 @@ without 9 phases of rework.
   Until then, the survey prompt carries a Band-Aid warning that the
   histogram is biased toward source code.
 
+### Phase 2.5 — Context budget reliability (#44)
+- Dir loop exhausts the 126k context budget on a 13-file Python lib
+  (observed during #5 smoke test). Must be addressed before Phase 3
+  adds longer prompts and more tools, or every later phase will
+  inherit a broken foundation.
+- Investigate root cause (tool result accumulation, parse_structure
+  output size, redundant reads) before picking a fix.
+- Add token-usage instrumentation so regressions are visible.
+
 ### Phase 3 — Investigation planning
 - Planning pass after survey, before dir loops
 - `submit_plan` tool
