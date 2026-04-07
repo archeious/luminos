@@ -108,5 +108,29 @@ class FormatSurveyBlockTests(unittest.TestCase):
         self.assertNotIn("Skip tools", block)
 
 
+class DefaultSurveyTests(unittest.TestCase):
+    def test_has_all_required_keys(self):
+        survey = ai._default_survey()
+        for key in ("description", "approach", "relevant_tools",
+                    "skip_tools", "domain_notes", "confidence"):
+            self.assertIn(key, survey)
+
+    def test_confidence_below_filter_threshold(self):
+        # Must be < _SURVEY_CONFIDENCE_THRESHOLD so _filter_dir_tools()
+        # never enforces skip_tools from a synthetic survey.
+        self.assertLess(
+            ai._default_survey()["confidence"],
+            ai._SURVEY_CONFIDENCE_THRESHOLD,
+        )
+
+    def test_filter_returns_full_toolbox_for_default(self):
+        all_names = {t["name"] for t in ai._DIR_TOOLS}
+        result = {t["name"] for t in ai._filter_dir_tools(ai._default_survey())}
+        self.assertEqual(result, all_names)
+
+    def test_skip_tools_is_empty(self):
+        self.assertEqual(ai._default_survey()["skip_tools"], [])
+
+
 if __name__ == "__main__":
     unittest.main()

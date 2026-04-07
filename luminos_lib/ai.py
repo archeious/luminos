@@ -756,6 +756,30 @@ def _get_child_summaries(dir_path, cache):
 _SURVEY_CONFIDENCE_THRESHOLD = 0.5
 _PROTECTED_DIR_TOOLS = {"submit_report"}
 
+# Survey-skip thresholds. Skip the survey only when BOTH are below.
+# See #46 for the plan to revisit these with empirical data.
+_SURVEY_MIN_FILES = 5
+_SURVEY_MIN_DIRS = 2
+
+
+def _default_survey():
+    """Synthetic survey for targets too small to justify the API call.
+
+    confidence=0.0 ensures _filter_dir_tools() never enforces skip_tools
+    based on this synthetic value — the dir loop keeps its full toolbox.
+    """
+    return {
+        "description": "Small target — survey skipped.",
+        "approach": (
+            "The target is small enough to investigate exhaustively. "
+            "Read every file directly."
+        ),
+        "relevant_tools": [],
+        "skip_tools": [],
+        "domain_notes": "",
+        "confidence": 0.0,
+    }
+
 
 def _format_survey_block(survey):
     """Render survey output as a labeled text block for the dir prompt."""
@@ -1228,8 +1252,21 @@ def _run_investigation(client, target, report, show_hidden=False,
           f"{'' if is_new else ' (resumed)'}", file=sys.stderr)
     print(f"  [AI] Cache: {cache.root}/", file=sys.stderr)
 
-    print("  [AI] Survey pass...", file=sys.stderr)
-    survey = _run_survey(client, target, report, tracker, verbose=verbose)
+    all_dirs = _discover_directories(target, show_hidden=show_hidden,
+                                     exclude=exclude)
+
+    total_files = sum((report.get("file_categories") or {}).values())
+    total_dirs = len(all_dirs)
+    if total_files < _SURVEY_MIN_FILES and total_dirs < _SURVEY_MIN_DIRS:
+        print(
+            f"  [AI] Survey skipped — {total_files} files, {total_dirs} dirs "
+            f"(below threshold).",
+            file=sys.stderr,
+        )
+        survey = _default_survey()
+    else:
+        print("  [AI] Survey pass...", file=sys.stderr)
+        survey = _run_survey(client, target, report, tracker, verbose=verbose)
     if survey:
         print(
             f"  [AI] Survey: {survey['description']} "
@@ -1250,9 +1287,6 @@ def _run_investigation(client, target, report, show_hidden=False,
             )
     else:
         print("  [AI] Survey unavailable — proceeding without it.", file=sys.stderr)
-
-    all_dirs = _discover_directories(target, show_hidden=show_hidden,
-                                     exclude=exclude)
 
     to_investigate = []
     cached_count = 0
