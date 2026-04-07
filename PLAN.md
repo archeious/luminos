@@ -535,6 +535,11 @@ without 9 phases of rework.
 - `_SURVEY_SYSTEM_PROMPT` in `prompts.py`
 - Wire into `_run_investigation()` before dir loops
 - Survey output injected into dir loop system prompt
+- **Rebuild filetype classifier (#42)** to remove source-code bias —
+  lands after the survey pass is observable end-to-end (#4–#7) and
+  before Phase 3 starts depending on survey output for real decisions.
+  Until then, the survey prompt carries a Band-Aid warning that the
+  histogram is biased toward source code.
 
 ### Phase 3 — Investigation planning
 - Planning pass after survey, before dir loops
