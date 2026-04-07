@@ -108,6 +108,12 @@ python3 luminos.py --install-extras
 - **Two-branch maximum** — never have more than 2 unmerged branches
 - **Merge with `--no-ff`** — preserves branch history in the log
 - **Delete after merge** — `git branch -d <branch>` immediately after merge
+- **Close the underlying issue manually** — after merging, `PATCH` the
+  referenced issue to `state: closed` via the Forgejo API. Do not rely
+  on `Closes #N` keyword auto-close — it has not worked reliably in
+  this Forgejo instance, leaving issues stale while their PRs are
+  merged. Manual close is one extra API call and is part of the merge
+  step, not optional.
 - **Push after commits** — keep Forgejo in sync after each commit or logical batch
 
 ---
