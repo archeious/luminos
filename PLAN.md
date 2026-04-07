@@ -607,6 +607,13 @@ architecture. The migration pain is intentional and instructive.
 - Report formatter renders populated fields only
 - Domain-appropriate section headers
 
+### End-of-project tuning
+- **Revisit survey-skip thresholds (#46)** — `_SURVEY_MIN_FILES` and
+  `_SURVEY_MIN_DIRS` shipped with values from #7's example, no
+  empirical basis. Once `--ai` has been run on a variety of real
+  targets, look at which runs skipped the survey vs ran it and decide
+  whether the thresholds (or the gate logic itself) need to change.
+
 ---
 
 ## File Map
