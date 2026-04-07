@@ -79,42 +79,15 @@ python3 luminos.py --install-extras
 
 ---
 
-## Development Workflow
+## Project-Specific Test Notes
 
-- **Issue-driven work** — all work must be tied to a Forgejo issue. If the
-  user names a specific issue, use it. If they describe work without an issue
-  number, search open issues for a match. If no issue exists, gather enough
-  context to create one before starting work. Branches and commits should
-  reference the issue number.
-- **Explain then build** — articulate the approach in a few bullets before
-  writing code. Surface assumptions early.
-- **Atomic commits** — each commit is one logical change.
-- **Test coverage required** — every change to a testable module must include
-  or update tests in `tests/`. Run with `python3 -m unittest discover -s tests/`.
-  All tests must pass before merging. Modules exempt from unit testing:
-  `ai.py` (requires live API), `ast_parser.py` (requires tree-sitter),
-  `watch.py` (stateful events), `prompts.py` (string templates only).
-- **Shiny object capture** — new ideas go to PLAN.md (Raw Thoughts) or a
-  Forgejo issue, not into current work.
+Run tests with `python3 -m unittest discover -s tests/`. Modules exempt from
+unit testing: `ai.py` (requires live API), `ast_parser.py` (requires
+tree-sitter), `watch.py` (stateful events), `prompts.py` (string templates
+only).
 
----
-
-## Branching Discipline
-
-- **Always branch** — no direct commits to main, ever
-- **Branch before first change** — create the branch before touching any files
-- **Naming:** `feat/`, `fix/`, `refactor/`, `chore/` + short description
-- **One branch, one concern** — don't mix unrelated changes
-- **Two-branch maximum** — never have more than 2 unmerged branches
-- **Merge with `--no-ff`** — preserves branch history in the log
-- **Delete after merge** — `git branch -d <branch>` immediately after merge
-- **Close the underlying issue manually** — after merging, `PATCH` the
-  referenced issue to `state: closed` via the Forgejo API. Do not rely
-  on `Closes #N` keyword auto-close — it has not worked reliably in
-  this Forgejo instance, leaving issues stale while their PRs are
-  merged. Manual close is one extra API call and is part of the merge
-  step, not optional.
-- **Push after commits** — keep Forgejo in sync after each commit or logical batch
+(Development workflow, branching discipline, and session protocols live in
+`~/.claude/CLAUDE.md`.)
 
 ---
 
@@ -128,60 +101,6 @@ python3 luminos.py --install-extras
 | Module files | snake_case | `ast_parser.py` |
 | CLI flags | kebab-case | `--clear-cache`, `--install-extras` |
 | Private functions | leading underscore | `_run_synthesis` |
-
----
-
-## Documentation Workflow
-
-- **Wiki location:** `docs/wiki/` — local git checkout of `luminos.wiki.git`
-- **Clone URL:** `ssh://git@forgejo-claude/archeious/luminos.wiki.git`
-- **Session startup:** clone if missing, `git -C docs/wiki pull` if present
-- **All reads and writes** happen on local files in `docs/wiki/`. Use Read,
-  Edit, Write, Grep, Glob — never the Forgejo web API for wiki content.
-- **Naming:** CamelCase slugs (`Architecture.md`, `DevelopmentGuide.md`).
-  Display name comes from the H1 heading inside the file.
-- **Commits:** direct to main branch. Batch logically — commit when finishing
-  a round of updates, not after every file.
-- **Push:** after each commit batch.
-
----
-
-## ADHD Session Protocols
-
-> **MANDATORY — follow literally, every session, no exceptions.**
-
-1. **Session Start Ritual** — Ensure `docs/wiki/` is cloned and current.
-   Fetch open issues from Forgejo (`archeious/luminos`) and present them as
-   suggested tasks. Ask: *"What's the one thing we're shipping?"* Once the
-   user answers, match to an existing issue or create one before starting
-   work. Do NOT summarize project state, recap history, or do any other work
-   before asking this question.
-
-2. **Dopamine-Friendly Task Sizing** — break work into 5–15 minute tasks with
-   clear, visible outputs. Each task should have a moment of completion.
-
-3. **Focus Guard** — classify incoming requests as on-topic / adjacent /
-   off-topic. Name it out loud before acting. Adjacent work goes to a new
-   issue; off-topic work gets deferred.
-
-4. **Shiny Object Capture** — when a new idea surfaces mid-session, write it
-   to PLAN.md (Raw Thoughts) or open a Forgejo issue, then return to the
-   current task. Do not context-switch.
-
-5. **Breadcrumb Protocol** — after each completed task, output:
-   `Done: <what was completed>. Next: <what comes next>.`
-   This re-orients after any interruption.
-
-6. **Session End Protocol** — before closing, state the exact pickup point for
-   the next session: branch name, file, what was in progress, and the
-   recommended first action next time.
-
----
-
-## Session Protocols
-
-- **"externalize"** → read and follow `docs/externalize.md`
-- **"wrap up" / "end session"** → read and follow `docs/wrap-up.md`
 
 ---
 
