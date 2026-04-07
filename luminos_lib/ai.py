@@ -31,8 +31,12 @@ from luminos_lib.tree import build_tree, render_tree
 
 MODEL = "claude-sonnet-4-20250514"
 
-# Context budget: trigger early exit at 70% of Sonnet's context window.
-MAX_CONTEXT = 180_000
+# Context budget: trigger early exit when a single API call's input_tokens
+# (the actual size of the context window in use, NOT the cumulative sum
+# across turns) approaches the model's real context limit. Sonnet 4 has
+# a 200k context window; we leave a 30% safety margin for the response
+# and any tool result we're about to append.
+MAX_CONTEXT = 200_000
 CONTEXT_BUDGET = int(MAX_CONTEXT * 0.70)
 
 # Pricing per 1M tokens (Claude Sonnet).
@@ -88,13 +92,25 @@ def _should_skip_dir(name):
 # ---------------------------------------------------------------------------
 
 class _TokenTracker:
-    """Track cumulative token usage across API calls."""
+    """Track token usage across API calls.
+
+    Two distinct quantities are tracked:
+      - cumulative totals (total_*, loop_*) — for cost reporting
+      - last_input — the size of the context window on the most recent
+        call, used to detect approaching the model's context limit
+
+    Cumulative input is NOT a meaningful proxy for context size: each
+    turn's input_tokens already includes the full message history, so
+    summing across turns double-counts everything. Use last_input for
+    budget decisions, totals for billing. (See #44.)
+    """
 
     def __init__(self):
         self.total_input = 0
         self.total_output = 0
         self.loop_input = 0
         self.loop_output = 0
+        self.last_input = 0
 
     def record(self, usage):
         """Record usage from a single API call."""
@@ -104,18 +120,21 @@ class _TokenTracker:
         self.total_output += out
         self.loop_input += inp
         self.loop_output += out
+        self.last_input = inp
 
     def reset_loop(self):
         """Reset per-loop counters (called between directory loops)."""
         self.loop_input = 0
         self.loop_output = 0
+        self.last_input = 0
 
     @property
     def loop_total(self):
         return self.loop_input + self.loop_output
 
     def budget_exceeded(self):
-        return self.loop_total > CONTEXT_BUDGET
+        """True when the most recent call's context exceeded the budget."""
+        return self.last_input > CONTEXT_BUDGET
 
     def summary(self):
         cost_in = self.total_input * INPUT_PRICE_PER_M / 1_000_000
@@ -862,7 +881,10 @@ def _run_dir_loop(client, target, cache, tracker, dir_path, max_turns=14,
         # Check context budget
         if tracker.budget_exceeded():
             print(f"  [AI]   Context budget reached — exiting early "
-                  f"({tracker.loop_total:,} tokens used)", file=sys.stderr)
+                  f"(context size {tracker.last_input:,} > "
+                  f"{CONTEXT_BUDGET:,} budget; "
+                  f"loop spend {tracker.loop_total:,} tokens)",
+                  file=sys.stderr)
             # Flush a partial directory summary from cached file entries
             if not cache.has_entry("dir", dir_path):
                 dir_real = os.path.realpath(dir_path)

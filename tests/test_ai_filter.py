@@ -108,6 +108,59 @@ class FormatSurveyBlockTests(unittest.TestCase):
         self.assertNotIn("Skip tools", block)
 
 
+class TokenTrackerTests(unittest.TestCase):
+    def _usage(self, inp, out):
+        u = MagicMock()
+        u.input_tokens = inp
+        u.output_tokens = out
+        return u
+
+    def test_record_updates_cumulative_and_last(self):
+        t = ai._TokenTracker()
+        t.record(self._usage(100, 20))
+        t.record(self._usage(200, 30))
+        self.assertEqual(t.total_input, 300)
+        self.assertEqual(t.total_output, 50)
+        self.assertEqual(t.loop_input, 300)
+        self.assertEqual(t.loop_output, 50)
+        self.assertEqual(t.last_input, 200)  # last call only
+
+    def test_budget_uses_last_input_not_sum(self):
+        t = ai._TokenTracker()
+        # Many small calls whose sum exceeds the budget but whose
+        # last input is well under the budget should NOT trip.
+        for _ in range(20):
+            t.record(self._usage(10_000, 100))
+        self.assertGreater(t.loop_input, ai.CONTEXT_BUDGET)
+        self.assertLess(t.last_input, ai.CONTEXT_BUDGET)
+        self.assertFalse(t.budget_exceeded())
+
+    def test_budget_trips_when_last_input_over_threshold(self):
+        t = ai._TokenTracker()
+        t.record(self._usage(ai.CONTEXT_BUDGET + 1, 100))
+        self.assertTrue(t.budget_exceeded())
+
+    def test_reset_loop_clears_loop_and_last(self):
+        t = ai._TokenTracker()
+        t.record(self._usage(500, 50))
+        t.reset_loop()
+        self.assertEqual(t.loop_input, 0)
+        self.assertEqual(t.loop_output, 0)
+        self.assertEqual(t.last_input, 0)
+        # Cumulative totals are NOT reset
+        self.assertEqual(t.total_input, 500)
+        self.assertEqual(t.total_output, 50)
+
+    def test_loop_total_property_still_works(self):
+        t = ai._TokenTracker()
+        t.record(self._usage(100, 25))
+        t.record(self._usage(200, 50))
+        self.assertEqual(t.loop_total, 375)
+
+    def test_max_context_is_sonnet_real_window(self):
+        self.assertEqual(ai.MAX_CONTEXT, 200_000)
+
+
 class DefaultSurveyTests(unittest.TestCase):
     def test_has_all_required_keys(self):
         survey = ai._default_survey()
