@@ -73,6 +73,9 @@ why you are uncertain (e.g. "binary file, content not readable",
 "file truncated at max_bytes"). Do NOT set confidence_reason when
 confidence is 0.7 or above.
 
+## Survey Context
+{survey_context}
+
 ## Context
 {context}
 
