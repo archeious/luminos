@@ -582,6 +582,17 @@ architecture. The migration pain is intentional and instructive.
 - `--no-external` flag to disable network tools
 - Budget tracking and logging
 
+### Phase 4.5 — Unit of analysis (#48)
+- "File" is hardcoded as the unit everywhere. Maildirs over-count
+  (one mailbox = thousands of files), mbox/SQLite/zip/notebooks
+  under-count (one file = many logical units). Format detection,
+  container handlers, and a unified "logical unit" abstraction
+  across filetypes/cache/report/ai. The `filetypes.py` rename
+  happens here as part of the substantive change, not as a
+  cosmetic relabel. Sequenced after Phase 4 because it overlaps
+  with format inspection and is substantial enough to be its own
+  phase.
+
 ### Phase 5 — Scale-tiered synthesis
 - Sizing measurement after dir loops
 - Tier classification
@@ -608,6 +619,11 @@ architecture. The migration pain is intentional and instructive.
 - Domain-appropriate section headers
 
 ### End-of-project tuning
+- **Honest terminal report file-type view (#49)** — the report still
+  shows the bucketed `summarize_categories()` view, which collapses
+  `.pyc` and other generated files into `unknown`. After #42 ships
+  the survey gets honest signals; the report can follow with an
+  extension sub-section or similar. Low priority, not blocking.
 - **Revisit survey-skip thresholds (#46)** — `_SURVEY_MIN_FILES` and
   `_SURVEY_MIN_DIRS` shipped with values from #7's example, no
   empirical basis. Once `--ai` has been run on a variety of real
