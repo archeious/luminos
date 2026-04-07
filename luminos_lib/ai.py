@@ -247,9 +247,14 @@ _DIR_TOOLS = [
                     "type": "object",
                     "description": (
                         "Cache entry. Files: {path, relative_path, size_bytes, "
-                        "category, summary, notable, notable_reason, cached_at}. "
+                        "category, summary, notable, notable_reason, "
+                        "confidence, confidence_reason, cached_at}. "
                         "Dirs: {path, relative_path, child_count, summary, "
-                        "dominant_category, notable_files, cached_at}."
+                        "dominant_category, notable_files, "
+                        "confidence, confidence_reason, cached_at}. "
+                        "Always set confidence (0.0–1.0); see system prompt "
+                        "for calibration. Set confidence_reason only when "
+                        "confidence < 0.7."
                     ),
                 },
             },
