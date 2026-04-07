@@ -10,6 +10,7 @@ from luminos_lib.filetypes import (
     _classify_one,
     classify_files,
     summarize_categories,
+    survey_signals,
 )
 
 
@@ -138,6 +139,70 @@ class TestClassifyFiles(unittest.TestCase):
         results = classify_files(self.tmpdir)
         item = next(r for r in results if r["name"] == "data.json")
         self.assertGreater(item["size"], 0)
+
+
+class TestSurveySignals(unittest.TestCase):
+    def _f(self, name, description="", category="source"):
+        return {"name": name, "path": f"/x/{name}", "category": category,
+                "size": 10, "description": description}
+
+    def test_empty_input(self):
+        s = survey_signals([])
+        self.assertEqual(s["total_files"], 0)
+        self.assertEqual(s["extension_histogram"], {})
+        self.assertEqual(s["file_descriptions"], {})
+        self.assertEqual(s["filename_samples"], [])
+
+    def test_extension_histogram_uses_lowercase_and_keeps_none(self):
+        files = [
+            self._f("a.PY"), self._f("b.py"), self._f("c.py"),
+            self._f("README"), self._f("Makefile"),
+        ]
+        s = survey_signals(files)
+        self.assertEqual(s["extension_histogram"][".py"], 3)
+        self.assertEqual(s["extension_histogram"]["(none)"], 2)
+
+    def test_file_descriptions_aggregated_and_truncated(self):
+        long_desc = "x" * 200
+        files = [
+            self._f("a.py", "Python script, ASCII text"),
+            self._f("b.py", "Python script, ASCII text"),
+            self._f("c.bin", long_desc),
+        ]
+        s = survey_signals(files)
+        self.assertEqual(s["file_descriptions"]["Python script, ASCII text"], 2)
+        # The long description was truncated and still counted once
+        truncated_keys = [k for k in s["file_descriptions"] if k.startswith("xxx") and k.endswith("...")]
+        self.assertEqual(len(truncated_keys), 1)
+        self.assertLessEqual(len(truncated_keys[0]), 84)  # 80 + "..."
+
+    def test_descriptions_skipped_when_empty(self):
+        files = [self._f("a.py", ""), self._f("b.py", None)]
+        s = survey_signals(files)
+        self.assertEqual(s["file_descriptions"], {})
+
+    def test_top_n_caps_at_20(self):
+        files = [self._f(f"f{i}.ext{i}") for i in range(50)]
+        s = survey_signals(files)
+        self.assertEqual(len(s["extension_histogram"]), 20)
+
+    def test_filename_samples_evenly_drawn(self):
+        files = [self._f(f"file_{i:04d}.txt") for i in range(100)]
+        s = survey_signals(files, max_samples=10)
+        self.assertEqual(len(s["filename_samples"]), 10)
+        # First sample is the first file (stride 10, index 0)
+        self.assertEqual(s["filename_samples"][0], "file_0000.txt")
+        # Last sample is around index 90, not 99
+        self.assertTrue(s["filename_samples"][-1].startswith("file_009"))
+
+    def test_filename_samples_returns_all_when_under_cap(self):
+        files = [self._f(f"f{i}.txt") for i in range(5)]
+        s = survey_signals(files, max_samples=20)
+        self.assertEqual(len(s["filename_samples"]), 5)
+
+    def test_total_files_matches_input(self):
+        files = [self._f(f"f{i}.py") for i in range(7)]
+        self.assertEqual(survey_signals(files)["total_files"], 7)
 
 
 if __name__ == "__main__":
