@@ -148,340 +148,47 @@ class _TokenTracker:
 # Tool definitions
 # ---------------------------------------------------------------------------
 
-_DIR_TOOLS = [
-    {
-        "name": "read_file",
-        "description": (
-            "Read and return the contents of a file. Path must be inside "
-            "the target directory."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Absolute or relative path to the file.",
-                },
-                "max_bytes": {
-                    "type": "integer",
-                    "description": "Maximum bytes to read (default 4096).",
-                },
-            },
-            "required": ["path"],
-        },
-    },
-    {
-        "name": "list_directory",
-        "description": (
-            "List the contents of a directory with file sizes and types."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Absolute or relative path to the directory.",
-                },
-                "show_hidden": {
-                    "type": "boolean",
-                    "description": "Include hidden files (default false).",
-                },
-            },
-            "required": ["path"],
-        },
-    },
-    {
-        "name": "run_command",
-        "description": (
-            "Run a read-only shell command. Allowed binaries: "
-            "wc, file, grep, head, tail, stat, du, find."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "command": {
-                    "type": "string",
-                    "description": "The shell command to execute.",
-                },
-            },
-            "required": ["command"],
-        },
-    },
-    {
-        "name": "parse_structure",
-        "description": (
-            "Parse a source file using tree-sitter and return its structural "
-            "skeleton: functions, classes, imports, and code metrics. "
-            "Supported: Python, JavaScript, TypeScript, Rust, Go."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Path to the source file to parse.",
-                },
-            },
-            "required": ["path"],
-        },
-    },
-    {
-        "name": "write_cache",
-        "description": (
-            "Write a summary cache entry for a file or directory. The data "
-            "must NOT contain raw file contents — summaries only."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "cache_type": {
-                    "type": "string",
-                    "enum": ["file", "dir"],
-                    "description": "'file' or 'dir'.",
-                },
-                "path": {
-                    "type": "string",
-                    "description": "The path being cached.",
-                },
-                "data": {
-                    "type": "object",
-                    "description": (
-                        "Cache entry. Files: {path, relative_path, size_bytes, "
-                        "category, summary, notable, notable_reason, "
-                        "confidence, confidence_reason, cached_at}. "
-                        "Dirs: {path, relative_path, child_count, summary, "
-                        "dominant_category, notable_files, "
-                        "confidence, confidence_reason, cached_at}. "
-                        "Always set confidence (0.0–1.0); see system prompt "
-                        "for calibration. Set confidence_reason only when "
-                        "confidence < 0.7."
-                    ),
-                },
-            },
-            "required": ["cache_type", "path", "data"],
-        },
-    },
-    {
-        "name": "think",
-        "description": (
-            "Record your reasoning before choosing which file or directory "
-            "to investigate next. Call this when deciding what to look at "
-            "— not before every individual tool call."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "observation": {
-                    "type": "string",
-                    "description": "What you have observed so far.",
-                },
-                "hypothesis": {
-                    "type": "string",
-                    "description": "Your hypothesis about the directory.",
-                },
-                "next_action": {
-                    "type": "string",
-                    "description": "What you plan to investigate next and why.",
-                },
-            },
-            "required": ["observation", "hypothesis", "next_action"],
-        },
-    },
-    {
-        "name": "checkpoint",
-        "description": (
-            "Summarize what you have learned so far about this directory "
-            "and what you still need to determine. Call this after completing "
-            "a significant cluster of files — not after every file."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "learned": {
-                    "type": "string",
-                    "description": "What you have learned so far.",
-                },
-                "still_unknown": {
-                    "type": "string",
-                    "description": "What you still need to determine.",
-                },
-                "next_phase": {
-                    "type": "string",
-                    "description": "What you will investigate next.",
-                },
-            },
-            "required": ["learned", "still_unknown", "next_phase"],
-        },
-    },
-    {
-        "name": "flag",
-        "description": (
-            "Mark a file, directory, or finding as notable or anomalous. "
-            "Call this immediately when you discover something surprising, "
-            "concerning, or important — do not save it for the report."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Relative path, or 'general'.",
-                },
-                "finding": {
-                    "type": "string",
-                    "description": "What you found.",
-                },
-                "severity": {
-                    "type": "string",
-                    "enum": ["info", "concern", "critical"],
-                    "description": "info | concern | critical",
-                },
-            },
-            "required": ["path", "finding", "severity"],
-        },
-    },
-    {
-        "name": "submit_report",
-        "description": (
-            "Submit the directory summary. This ends the investigation loop."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "summary": {
-                    "type": "string",
-                    "description": "1-3 sentence summary of the directory.",
-                },
-            },
-            "required": ["summary"],
-        },
-    },
-]
+# ---------------------------------------------------------------------------
+# Tool registry
+#
+# Tools are declared once via register_tool() at the bottom of the tool
+# implementations section. Each registration lands its schema in one or
+# more scope lists (_DIR_TOOLS / _SYNTHESIS_TOOLS / _SURVEY_TOOLS) and
+# its handler in _TOOL_DISPATCH (used by _execute_tool()).
+#
+# Tools intercepted by the loop body — submit_report and submit_survey —
+# register their schema only and have no handler entry.
+# ---------------------------------------------------------------------------
 
-_SURVEY_TOOLS = [
-    {
-        "name": "submit_survey",
-        "description": (
-            "Submit the reconnaissance survey. Call exactly once."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "description": {
-                    "type": "string",
-                    "description": "Plain-language description of the target.",
-                },
-                "approach": {
-                    "type": "string",
-                    "description": "Recommended analytical approach.",
-                },
-                "relevant_tools": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Tool names the dir loop should lean on.",
-                },
-                "skip_tools": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Tool names whose use would be wrong here.",
-                },
-                "domain_notes": {
-                    "type": "string",
-                    "description": "Short actionable hint, or empty string.",
-                },
-                "confidence": {
-                    "type": "number",
-                    "description": "0.0–1.0 confidence in this survey.",
-                },
-            },
-            "required": [
-                "description", "approach", "relevant_tools",
-                "skip_tools", "domain_notes", "confidence",
-            ],
-        },
-    },
-]
+_DIR_TOOLS = []
+_SYNTHESIS_TOOLS = []
+_SURVEY_TOOLS = []
+_TOOL_DISPATCH = {}
+
+_TOOL_REGISTRIES = {
+    "dir": _DIR_TOOLS,
+    "synthesis": _SYNTHESIS_TOOLS,
+    "survey": _SURVEY_TOOLS,
+}
 
 
-_SYNTHESIS_TOOLS = [
-    {
-        "name": "read_cache",
-        "description": "Read a previously cached summary for a file or directory.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "cache_type": {
-                    "type": "string",
-                    "enum": ["file", "dir"],
-                },
-                "path": {
-                    "type": "string",
-                    "description": "The path to look up.",
-                },
-            },
-            "required": ["cache_type", "path"],
-        },
-    },
-    {
-        "name": "list_cache",
-        "description": "List all cached entry paths of a given type.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "cache_type": {
-                    "type": "string",
-                    "enum": ["file", "dir"],
-                },
-            },
-            "required": ["cache_type"],
-        },
-    },
-    {
-        "name": "flag",
-        "description": (
-            "Mark a file, directory, or finding as notable or anomalous. "
-            "Call this immediately when you discover something surprising, "
-            "concerning, or important — do not save it for the report."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Relative path, or 'general'.",
-                },
-                "finding": {
-                    "type": "string",
-                    "description": "What you found.",
-                },
-                "severity": {
-                    "type": "string",
-                    "enum": ["info", "concern", "critical"],
-                    "description": "info | concern | critical",
-                },
-            },
-            "required": ["path", "finding", "severity"],
-        },
-    },
-    {
-        "name": "submit_report",
-        "description": "Submit the final analysis report.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "brief": {
-                    "type": "string",
-                    "description": "2-4 sentence summary.",
-                },
-                "detailed": {
-                    "type": "string",
-                    "description": "Thorough breakdown.",
-                },
-            },
-            "required": ["brief", "detailed"],
-        },
-    },
-]
+def register_tool(name, description, schema, scopes, handler=None):
+    """Register a tool's schema in one or more loop scopes and its handler.
+
+    A single tool can be registered multiple times with different schemas
+    in different scopes (submit_report has different schemas for the dir
+    and synthesis loops). The handler is global — pass handler= once and
+    omit it on subsequent registrations under the same name.
+    """
+    schema_entry = {
+        "name": name,
+        "description": description,
+        "input_schema": schema,
+    }
+    for scope in scopes:
+        _TOOL_REGISTRIES[scope].append(schema_entry)
+    if handler is not None:
+        _TOOL_DISPATCH[name] = handler
 
 
 # ---------------------------------------------------------------------------
@@ -647,18 +354,366 @@ def _tool_flag(args, _target, cache):
     return "ok"
 
 
-_TOOL_DISPATCH = {
-    "read_file": _tool_read_file,
-    "list_directory": _tool_list_directory,
-    "run_command": _tool_run_command,
-    "parse_structure": _tool_parse_structure,
-    "write_cache": _tool_write_cache,
-    "read_cache": _tool_read_cache,
-    "list_cache": _tool_list_cache,
-    "think": _tool_think,
-    "checkpoint": _tool_checkpoint,
-    "flag": _tool_flag,
+# ---------------------------------------------------------------------------
+# Tool registrations
+#
+# Order within each scope is preserved to keep the agent-visible tool list
+# stable. Tools that appear in two scopes (flag) and tools whose schema
+# differs by scope (submit_report) are registered once per scope.
+# ---------------------------------------------------------------------------
+
+_FLAG_DESCRIPTION = (
+    "Mark a file, directory, or finding as notable or anomalous. "
+    "Call this immediately when you discover something surprising, "
+    "concerning, or important — do not save it for the report."
+)
+_FLAG_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "path": {
+            "type": "string",
+            "description": "Relative path, or 'general'.",
+        },
+        "finding": {
+            "type": "string",
+            "description": "What you found.",
+        },
+        "severity": {
+            "type": "string",
+            "enum": ["info", "concern", "critical"],
+            "description": "info | concern | critical",
+        },
+    },
+    "required": ["path", "finding", "severity"],
 }
+
+
+# --- Dir loop tools ---
+
+register_tool(
+    name="read_file",
+    description=(
+        "Read and return the contents of a file. Path must be inside "
+        "the target directory."
+    ),
+    schema={
+        "type": "object",
+        "properties": {
+            "path": {
+                "type": "string",
+                "description": "Absolute or relative path to the file.",
+            },
+            "max_bytes": {
+                "type": "integer",
+                "description": "Maximum bytes to read (default 4096).",
+            },
+        },
+        "required": ["path"],
+    },
+    scopes=["dir"],
+    handler=_tool_read_file,
+)
+
+register_tool(
+    name="list_directory",
+    description=(
+        "List the contents of a directory with file sizes and types."
+    ),
+    schema={
+        "type": "object",
+        "properties": {
+            "path": {
+                "type": "string",
+                "description": "Absolute or relative path to the directory.",
+            },
+            "show_hidden": {
+                "type": "boolean",
+                "description": "Include hidden files (default false).",
+            },
+        },
+        "required": ["path"],
+    },
+    scopes=["dir"],
+    handler=_tool_list_directory,
+)
+
+register_tool(
+    name="run_command",
+    description=(
+        "Run a read-only shell command. Allowed binaries: "
+        "wc, file, grep, head, tail, stat, du, find."
+    ),
+    schema={
+        "type": "object",
+        "properties": {
+            "command": {
+                "type": "string",
+                "description": "The shell command to execute.",
+            },
+        },
+        "required": ["command"],
+    },
+    scopes=["dir"],
+    handler=_tool_run_command,
+)
+
+register_tool(
+    name="parse_structure",
+    description=(
+        "Parse a source file using tree-sitter and return its structural "
+        "skeleton: functions, classes, imports, and code metrics. "
+        "Supported: Python, JavaScript, TypeScript, Rust, Go."
+    ),
+    schema={
+        "type": "object",
+        "properties": {
+            "path": {
+                "type": "string",
+                "description": "Path to the source file to parse.",
+            },
+        },
+        "required": ["path"],
+    },
+    scopes=["dir"],
+    handler=_tool_parse_structure,
+)
+
+register_tool(
+    name="write_cache",
+    description=(
+        "Write a summary cache entry for a file or directory. The data "
+        "must NOT contain raw file contents — summaries only."
+    ),
+    schema={
+        "type": "object",
+        "properties": {
+            "cache_type": {
+                "type": "string",
+                "enum": ["file", "dir"],
+                "description": "'file' or 'dir'.",
+            },
+            "path": {
+                "type": "string",
+                "description": "The path being cached.",
+            },
+            "data": {
+                "type": "object",
+                "description": (
+                    "Cache entry. Files: {path, relative_path, size_bytes, "
+                    "category, summary, notable, notable_reason, "
+                    "confidence, confidence_reason, cached_at}. "
+                    "Dirs: {path, relative_path, child_count, summary, "
+                    "dominant_category, notable_files, "
+                    "confidence, confidence_reason, cached_at}. "
+                    "Always set confidence (0.0–1.0); see system prompt "
+                    "for calibration. Set confidence_reason only when "
+                    "confidence < 0.7."
+                ),
+            },
+        },
+        "required": ["cache_type", "path", "data"],
+    },
+    scopes=["dir"],
+    handler=_tool_write_cache,
+)
+
+register_tool(
+    name="think",
+    description=(
+        "Record your reasoning before choosing which file or directory "
+        "to investigate next. Call this when deciding what to look at "
+        "— not before every individual tool call."
+    ),
+    schema={
+        "type": "object",
+        "properties": {
+            "observation": {
+                "type": "string",
+                "description": "What you have observed so far.",
+            },
+            "hypothesis": {
+                "type": "string",
+                "description": "Your hypothesis about the directory.",
+            },
+            "next_action": {
+                "type": "string",
+                "description": "What you plan to investigate next and why.",
+            },
+        },
+        "required": ["observation", "hypothesis", "next_action"],
+    },
+    scopes=["dir"],
+    handler=_tool_think,
+)
+
+register_tool(
+    name="checkpoint",
+    description=(
+        "Summarize what you have learned so far about this directory "
+        "and what you still need to determine. Call this after completing "
+        "a significant cluster of files — not after every file."
+    ),
+    schema={
+        "type": "object",
+        "properties": {
+            "learned": {
+                "type": "string",
+                "description": "What you have learned so far.",
+            },
+            "still_unknown": {
+                "type": "string",
+                "description": "What you still need to determine.",
+            },
+            "next_phase": {
+                "type": "string",
+                "description": "What you will investigate next.",
+            },
+        },
+        "required": ["learned", "still_unknown", "next_phase"],
+    },
+    scopes=["dir"],
+    handler=_tool_checkpoint,
+)
+
+register_tool(
+    name="flag",
+    description=_FLAG_DESCRIPTION,
+    schema=_FLAG_SCHEMA,
+    scopes=["dir"],
+    handler=_tool_flag,
+)
+
+register_tool(
+    name="submit_report",
+    description=(
+        "Submit the directory summary. This ends the investigation loop."
+    ),
+    schema={
+        "type": "object",
+        "properties": {
+            "summary": {
+                "type": "string",
+                "description": "1-3 sentence summary of the directory.",
+            },
+        },
+        "required": ["summary"],
+    },
+    scopes=["dir"],
+)
+
+
+# --- Synthesis tools ---
+
+register_tool(
+    name="read_cache",
+    description="Read a previously cached summary for a file or directory.",
+    schema={
+        "type": "object",
+        "properties": {
+            "cache_type": {
+                "type": "string",
+                "enum": ["file", "dir"],
+            },
+            "path": {
+                "type": "string",
+                "description": "The path to look up.",
+            },
+        },
+        "required": ["cache_type", "path"],
+    },
+    scopes=["synthesis"],
+    handler=_tool_read_cache,
+)
+
+register_tool(
+    name="list_cache",
+    description="List all cached entry paths of a given type.",
+    schema={
+        "type": "object",
+        "properties": {
+            "cache_type": {
+                "type": "string",
+                "enum": ["file", "dir"],
+            },
+        },
+        "required": ["cache_type"],
+    },
+    scopes=["synthesis"],
+    handler=_tool_list_cache,
+)
+
+register_tool(
+    name="flag",
+    description=_FLAG_DESCRIPTION,
+    schema=_FLAG_SCHEMA,
+    scopes=["synthesis"],
+)
+
+register_tool(
+    name="submit_report",
+    description="Submit the final analysis report.",
+    schema={
+        "type": "object",
+        "properties": {
+            "brief": {
+                "type": "string",
+                "description": "2-4 sentence summary.",
+            },
+            "detailed": {
+                "type": "string",
+                "description": "Thorough breakdown.",
+            },
+        },
+        "required": ["brief", "detailed"],
+    },
+    scopes=["synthesis"],
+)
+
+
+# --- Survey tools ---
+
+register_tool(
+    name="submit_survey",
+    description=(
+        "Submit the reconnaissance survey. Call exactly once."
+    ),
+    schema={
+        "type": "object",
+        "properties": {
+            "description": {
+                "type": "string",
+                "description": "Plain-language description of the target.",
+            },
+            "approach": {
+                "type": "string",
+                "description": "Recommended analytical approach.",
+            },
+            "relevant_tools": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Tool names the dir loop should lean on.",
+            },
+            "skip_tools": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Tool names whose use would be wrong here.",
+            },
+            "domain_notes": {
+                "type": "string",
+                "description": "Short actionable hint, or empty string.",
+            },
+            "confidence": {
+                "type": "number",
+                "description": "0.0–1.0 confidence in this survey.",
+            },
+        },
+        "required": [
+            "description", "approach", "relevant_tools",
+            "skip_tools", "domain_notes", "confidence",
+        ],
+    },
+    scopes=["survey"],
+)
 
 
 def _execute_tool(name, args, target, cache, dir_rel, turn, verbose=False):
