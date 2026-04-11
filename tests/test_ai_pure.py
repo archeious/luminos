@@ -13,17 +13,21 @@ import unittest
 from types import SimpleNamespace
 
 from luminos_lib.ai import (
+    CONTEXT_BUDGET,
     _DIR_TOOLS,
     _PROTECTED_DIR_TOOLS,
     _SURVEY_CONFIDENCE_THRESHOLD,
+    _TokenTracker,
     _block_to_dict,
     _default_survey,
+    _discover_directories,
     _filter_dir_tools,
     _flush_partial_dir_entry,
     _format_survey_block,
     _format_survey_signals,
     _path_is_safe,
     _should_skip_dir,
+    _synthesize_from_cache,
 )
 from luminos_lib.cache import _CacheManager
 
@@ -418,6 +422,299 @@ class TestFlushPartialDirEntry(unittest.TestCase):
         _flush_partial_dir_entry(self.dir_path, self.target, self.cache)
         entry = self.cache.read_entry("dir", self.dir_path)
         self.assertIn("subdir/important.py", entry["notable_files"])
+
+
+# ---------------------------------------------------------------------------
+# _TokenTracker (added by #70)
+# ---------------------------------------------------------------------------
+
+def _usage(input_tokens=0, output_tokens=0):
+    """Build a fake Anthropic SDK usage object for the tracker tests."""
+    return SimpleNamespace(
+        input_tokens=input_tokens, output_tokens=output_tokens,
+    )
+
+
+class TestTokenTracker(unittest.TestCase):
+    def test_initial_state_is_zero(self):
+        t = _TokenTracker()
+        self.assertEqual(t.total_input, 0)
+        self.assertEqual(t.total_output, 0)
+        self.assertEqual(t.loop_input, 0)
+        self.assertEqual(t.loop_output, 0)
+        self.assertEqual(t.last_input, 0)
+        self.assertEqual(t.loop_total, 0)
+        self.assertFalse(t.budget_exceeded())
+
+    def test_record_updates_all_counters(self):
+        t = _TokenTracker()
+        t.record(_usage(input_tokens=1000, output_tokens=200))
+        self.assertEqual(t.total_input, 1000)
+        self.assertEqual(t.total_output, 200)
+        self.assertEqual(t.loop_input, 1000)
+        self.assertEqual(t.loop_output, 200)
+        self.assertEqual(t.last_input, 1000)
+
+    def test_loop_total_property(self):
+        t = _TokenTracker()
+        t.record(_usage(input_tokens=300, output_tokens=70))
+        self.assertEqual(t.loop_total, 370)
+
+    def test_record_with_missing_attrs_defaults_to_zero(self):
+        t = _TokenTracker()
+        t.record(SimpleNamespace())
+        self.assertEqual(t.total_input, 0)
+        self.assertEqual(t.total_output, 0)
+        self.assertEqual(t.last_input, 0)
+
+    def test_multiple_records_accumulate(self):
+        t = _TokenTracker()
+        t.record(_usage(input_tokens=500, output_tokens=100))
+        t.record(_usage(input_tokens=700, output_tokens=200))
+        self.assertEqual(t.total_input, 1200)
+        self.assertEqual(t.total_output, 300)
+        # last_input is the most recent call, NOT the cumulative sum.
+        self.assertEqual(t.last_input, 700)
+
+    def test_reset_loop_zeros_loop_counters_preserves_totals(self):
+        t = _TokenTracker()
+        t.record(_usage(input_tokens=500, output_tokens=100))
+        t.record(_usage(input_tokens=300, output_tokens=50))
+        t.reset_loop()
+        # Loop counters cleared.
+        self.assertEqual(t.loop_input, 0)
+        self.assertEqual(t.loop_output, 0)
+        self.assertEqual(t.last_input, 0)
+        # Cumulative totals preserved.
+        self.assertEqual(t.total_input, 800)
+        self.assertEqual(t.total_output, 150)
+
+    def test_grand_totals_accumulate_across_loops(self):
+        t = _TokenTracker()
+        t.record(_usage(input_tokens=500, output_tokens=100))
+        t.reset_loop()
+        t.record(_usage(input_tokens=400, output_tokens=80))
+        t.reset_loop()
+        t.record(_usage(input_tokens=200, output_tokens=40))
+        self.assertEqual(t.total_input, 1100)
+        self.assertEqual(t.total_output, 220)
+
+    def test_budget_exceeded_uses_last_input_not_cumulative(self):
+        # The load-bearing #44 fix: cumulative is meaningless because
+        # each turn's input_tokens already includes prior history.
+        t = _TokenTracker()
+        # Record many small calls whose CUMULATIVE input would exceed
+        # the budget but whose individual last_input stays small.
+        for _ in range(10):
+            t.record(_usage(input_tokens=CONTEXT_BUDGET // 5, output_tokens=0))
+        self.assertGreater(t.total_input, CONTEXT_BUDGET)
+        # last_input is just the most recent call — well under budget.
+        self.assertEqual(t.last_input, CONTEXT_BUDGET // 5)
+        self.assertFalse(t.budget_exceeded())
+
+    def test_budget_exceeded_strict_greater_than(self):
+        # The gate is `>`, not `>=`. last_input == CONTEXT_BUDGET
+        # should NOT trip the budget.
+        t = _TokenTracker()
+        t.record(_usage(input_tokens=CONTEXT_BUDGET, output_tokens=0))
+        self.assertFalse(t.budget_exceeded())
+
+    def test_budget_exceeded_one_over_trips(self):
+        t = _TokenTracker()
+        t.record(_usage(input_tokens=CONTEXT_BUDGET + 1, output_tokens=0))
+        self.assertTrue(t.budget_exceeded())
+
+    def test_summary_returns_nonempty_string(self):
+        t = _TokenTracker()
+        t.record(_usage(input_tokens=1000, output_tokens=500))
+        out = t.summary()
+        self.assertIsInstance(out, str)
+        self.assertIn("1,000", out)
+        self.assertIn("500", out)
+        self.assertIn("$", out)
+
+
+# ---------------------------------------------------------------------------
+# _synthesize_from_cache (added by #70)
+# ---------------------------------------------------------------------------
+
+class TestSynthesizeFromCache(unittest.TestCase):
+    def setUp(self):
+        self.target = tempfile.mkdtemp(prefix="luminos-test-target-")
+        self.cache = _make_manager(self.target)
+
+    def tearDown(self):
+        shutil.rmtree(self.target, ignore_errors=True)
+
+    def test_empty_cache_returns_incomplete_message(self):
+        brief, detailed = _synthesize_from_cache(self.cache)
+        self.assertIn("incomplete", brief)
+        self.assertEqual(detailed, "")
+
+    def test_single_dir_entry(self):
+        self.cache.write_entry("dir", "/x/auth", {
+            "path": "/x/auth",
+            "relative_path": "auth",
+            "child_count": 3,
+            "summary": "Authentication module.",
+            "dominant_category": "code",
+            "cached_at": "2026-04-11T00:00:00+00:00",
+        })
+        brief, detailed = _synthesize_from_cache(self.cache)
+        self.assertEqual(brief, "Authentication module.")
+        self.assertIn("**auth/**", detailed)
+        self.assertIn("Authentication module.", detailed)
+
+    def test_multiple_dir_entries_brief_is_first(self):
+        for rel, summary in [
+            ("auth", "Auth code."),
+            ("db", "Database layer."),
+            ("api", "HTTP API."),
+        ]:
+            self.cache.write_entry("dir", f"/x/{rel}", {
+                "path": f"/x/{rel}",
+                "relative_path": rel,
+                "child_count": 1,
+                "summary": summary,
+                "dominant_category": "code",
+                "cached_at": "2026-04-11T00:00:00+00:00",
+            })
+        brief, detailed = _synthesize_from_cache(self.cache)
+        # Brief is the first dir entry's summary.
+        self.assertIn(brief, {"Auth code.", "Database layer.", "HTTP API."})
+        # Detailed includes all three with markdown formatting.
+        self.assertIn("Auth code.", detailed)
+        self.assertIn("Database layer.", detailed)
+        self.assertIn("HTTP API.", detailed)
+        self.assertIn("**auth/**", detailed)
+        self.assertIn("**db/**", detailed)
+        self.assertIn("**api/**", detailed)
+
+    def test_dir_entries_with_empty_summary_are_skipped(self):
+        self.cache.write_entry("dir", "/x/empty", {
+            "path": "/x/empty",
+            "relative_path": "empty",
+            "child_count": 0,
+            "summary": "",
+            "dominant_category": "unknown",
+            "cached_at": "2026-04-11T00:00:00+00:00",
+        })
+        self.cache.write_entry("dir", "/x/real", {
+            "path": "/x/real",
+            "relative_path": "real",
+            "child_count": 1,
+            "summary": "Real content.",
+            "dominant_category": "code",
+            "cached_at": "2026-04-11T00:00:00+00:00",
+        })
+        brief, detailed = _synthesize_from_cache(self.cache)
+        self.assertEqual(brief, "Real content.")
+        self.assertNotIn("**empty/**", detailed)
+        self.assertIn("**real/**", detailed)
+
+    def test_file_entries_alone_do_not_satisfy(self):
+        # _synthesize_from_cache reads dir entries only. File entries
+        # alone should produce the "incomplete" fallback.
+        self.cache.write_entry("file", "/x/foo.py", {
+            "path": "/x/foo.py",
+            "relative_path": "foo.py",
+            "size_bytes": 10,
+            "category": "code",
+            "summary": "A file.",
+            "cached_at": "2026-04-11T00:00:00+00:00",
+        })
+        brief, detailed = _synthesize_from_cache(self.cache)
+        self.assertIn("incomplete", brief)
+        self.assertEqual(detailed, "")
+
+
+# ---------------------------------------------------------------------------
+# _discover_directories (added by #70)
+# ---------------------------------------------------------------------------
+
+class TestDiscoverDirectories(unittest.TestCase):
+    def setUp(self):
+        self.target = tempfile.mkdtemp(prefix="luminos-test-target-")
+
+    def tearDown(self):
+        shutil.rmtree(self.target, ignore_errors=True)
+
+    def _mkdirs(self, *rels):
+        for rel in rels:
+            os.makedirs(os.path.join(self.target, rel), exist_ok=True)
+
+    def test_empty_target_returns_target_only(self):
+        result = _discover_directories(self.target)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(os.path.realpath(result[0]),
+                         os.path.realpath(self.target))
+
+    def test_single_subdir(self):
+        self._mkdirs("sub")
+        result = _discover_directories(self.target)
+        self.assertEqual(len(result), 2)
+        # Leaf-first: "sub" (deeper) comes before target.
+        self.assertTrue(result[0].endswith("sub"))
+
+    def test_leaves_first_ordering(self):
+        self._mkdirs("a/b/c", "a/d", "a/b/e")
+        result = _discover_directories(self.target)
+        # Compute depth (sep count) of each result.
+        depths = [d.count(os.sep) for d in result]
+        # Each successive entry should have depth <= the previous one.
+        for i in range(len(depths) - 1):
+            self.assertGreaterEqual(
+                depths[i], depths[i + 1],
+                f"Not leaves-first: {result}",
+            )
+        # Verify all expected dirs are present.
+        rels = [os.path.relpath(d, self.target) for d in result]
+        for expected in ["a/b/c", "a/b/e", "a/d", "a/b", "a", "."]:
+            self.assertIn(expected, rels, f"missing {expected} from {rels}")
+
+    def test_skip_dirs_excluded(self):
+        self._mkdirs(".git", "__pycache__", "node_modules", "src")
+        result = _discover_directories(self.target)
+        rels = [os.path.relpath(d, self.target) for d in result]
+        self.assertIn("src", rels)
+        self.assertNotIn(".git", rels)
+        self.assertNotIn("__pycache__", rels)
+        self.assertNotIn("node_modules", rels)
+
+    def test_egg_info_glob_excluded(self):
+        self._mkdirs("luminos.egg-info", "src")
+        result = _discover_directories(self.target)
+        rels = [os.path.relpath(d, self.target) for d in result]
+        self.assertNotIn("luminos.egg-info", rels)
+        self.assertIn("src", rels)
+
+    def test_custom_exclude_honored(self):
+        self._mkdirs("vendor", "src")
+        result = _discover_directories(self.target, exclude=["vendor"])
+        rels = [os.path.relpath(d, self.target) for d in result]
+        self.assertNotIn("vendor", rels)
+        self.assertIn("src", rels)
+
+    def test_hidden_dirs_excluded_by_default(self):
+        self._mkdirs(".hidden_thing", "visible")
+        result = _discover_directories(self.target)
+        rels = [os.path.relpath(d, self.target) for d in result]
+        self.assertNotIn(".hidden_thing", rels)
+        self.assertIn("visible", rels)
+
+    def test_show_hidden_includes_dotdirs(self):
+        self._mkdirs(".hidden_thing", "visible")
+        result = _discover_directories(self.target, show_hidden=True)
+        rels = [os.path.relpath(d, self.target) for d in result]
+        self.assertIn(".hidden_thing", rels)
+        self.assertIn("visible", rels)
+
+    def test_show_hidden_does_not_override_skip_list(self):
+        # .git is in _SKIP_DIRS so even with show_hidden=True it stays out.
+        self._mkdirs(".git")
+        result = _discover_directories(self.target, show_hidden=True)
+        rels = [os.path.relpath(d, self.target) for d in result]
+        self.assertNotIn(".git", rels)
 
 
 if __name__ == "__main__":

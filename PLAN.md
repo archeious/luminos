@@ -576,38 +576,51 @@ without 9 phases of rework.
   output size, redundant reads) before picking a fix.
 - Add token-usage instrumentation so regressions are visible.
 
-### Phase 2.6 — Pre-Phase-3 cleanup (#54, #57)
+### Phase 2.6 — Pre-Phase-3 cleanup (#54, #57) ✅ shipped
 Two debts surfaced during the Session 5 documentation deep dive that
-should be paid before Phase 3 adds more state to the same code paths:
+were paid before Phase 3 adds more state to the same code paths:
 
-- **#54 — Phase 1 confidence-write path is dormant.** The cache schema
-  accepts `confidence` and `low_confidence_entries()` works, but no
-  prompt instructs the agent to set the field. Phase 1 is half-shipped.
-  Wire the prompt before Phase 8 (refinement) tries to consume the
-  signal — preferably now while Phase 1 context is still fresh.
-- **#57 — Refactor `_run_dir_loop` before #10 lands.** The function is
-  at its readability ceiling (~160 lines, four conceptual layers).
-  Phase 3 #10 (dynamic turn allocation) will inject per-dir `max_turns`
-  and possibly mid-loop renegotiation. Extract `_build_dir_loop_context`,
-  `_check_budget_and_flush_partial`, and `_handle_turn_response` into
-  focused helpers first; refactoring after #10 will be harder.
+- **#54** — Phase 1 confidence-write path was dormant. Cache schema
+  accepted `confidence` and `low_confidence_entries()` worked, but no
+  prompt instructed the agent to set the field. Wired in Session 8.
+- **#57** — `_run_dir_loop` was ~160 lines holding four conceptual
+  layers. Refactored in Session 9 into three focused helpers
+  (`_build_dir_loop_context`, `_flush_partial_dir_entry`,
+  `_handle_turn_response`) so Phase 3 dynamic turn allocation has a
+  thin coordinator to inject into.
+
+### Phase 2.7 — Tool registration cleanup (#56) ✅ shipped
+Adding a tool used to require updating `_TOOL_DISPATCH` and `_DIR_TOOLS`
+in two separate places. Forgetting one half was silent. Replaced both
+with a single `register_tool()` call per (tool, scope) in Session 9.
+Phase 3.5 MCP backend will eventually replace this with dynamic
+discovery, at which point `register_tool()` collapses to a one-line
+forward.
+
+### Phase 2.8 — Pre-Phase-3 test coverage (#55, #70)
+Safety nets for the helpers Phase 3 will pile state on top of. Two
+waves:
+
+- **#55** ✅ shipped — `tests/test_ai_pure.py` covers the easy
+  decision-logic helpers: `_filter_dir_tools`, `_format_survey_block`,
+  `_format_survey_signals`, `_default_survey`, `_should_skip_dir`,
+  `_path_is_safe`, `_block_to_dict`, plus `_flush_partial_dir_entry`
+  from #57. 45 tests added in Session 9.
+- **#70** — second wave covering the highest-impact remaining helpers
+  that escaped the first sweep:
+  - `_TokenTracker` — pins the load-bearing #44 fix
+    (`last_input` vs cumulative for budget decisions)
+  - `_synthesize_from_cache` — last-resort fallback that fires almost
+    never in normal runs and is therefore the kind of code that silently
+    rots
+  - `_discover_directories` — leaves-first walk and skip-dir filter,
+    foundation of the cache reuse story
 
 ### Phase 3 — Investigation planning
 - Planning pass after survey, before dir loops
 - `submit_plan` tool
 - Dynamic turn allocation based on plan
 - Dir loop orchestrator updated to follow plan
-
-### Phase 3.4 — Tool registration cleanup (#56)
-Adding a tool currently requires updating `_TOOL_DISPATCH` and
-`_DIR_TOOLS` in two separate places in `ai.py`. Forgetting one half is
-silent. A small `@dir_tool` decorator collapses this into one
-declaration. **Decision point:** Phase 3.5 (MCP) will replace
-`_TOOL_DISPATCH` with dynamic discovery from an MCP server, which makes
-this issue partially moot. Either fix now (easier to migrate one
-well-structured registry to MCP than two parallel structures) or defer
-and let it die with the Python dispatch table. Decide before starting
-3.5.
 
 ### Phase 3.5 — MCP backend abstraction (pivot point)
 See Part 10 for full design. This phase happens *after* Phase 3 is
@@ -670,14 +683,6 @@ architecture. The migration pain is intentional and instructive.
 - Superset output fields in synthesis submit_report schema
 - Report formatter renders populated fields only
 - Domain-appropriate section headers
-
-### Background chore — Unit tests for pure helpers in ai.py (#55)
-`ai.py` is documented as exempt from unit testing because the dir loop
-needs a live API. But several pure helpers (`_filter_dir_tools`,
-`_format_survey_block`, `_format_survey_signals`, `_default_survey`,
-`_should_skip_dir`, `_path_is_safe`, `_block_to_dict`) have no API
-dependency and can be tested directly. Low priority, not phase-blocking,
-fold into any session that touches these helpers.
 
 ### End-of-project tuning
 - **Honest terminal report file-type view (#49)** — the report still
