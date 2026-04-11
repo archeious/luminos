@@ -89,9 +89,10 @@ python3 -m unittest discover -s tests/
 
 Modules that are intentionally not unit tested:
 
-- `luminos_lib/ai.py`: requires a live Anthropic API, exercised in practice
 - `luminos_lib/ast_parser.py`: requires tree-sitter grammars installed
 - `luminos_lib/prompts.py`: string templates only
+
+`luminos_lib/ai.py` is partially covered. End-to-end agent loops require a live Anthropic API and stay exempt, but pure helpers are tested in `tests/test_ai_pure.py`.
 
 ## License
 

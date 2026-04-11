@@ -86,8 +86,12 @@ python3 luminos.py --clear-cache
 ## Project-Specific Test Notes
 
 Run tests with `python3 -m unittest discover -s tests/`. Modules exempt from
-unit testing: `ai.py` (requires live API), `ast_parser.py` (requires
-tree-sitter grammars at import time), `prompts.py` (string templates only).
+unit testing: `ast_parser.py` (requires tree-sitter grammars at import time)
+and `prompts.py` (string templates only). `ai.py` is partially covered:
+end-to-end loops require a live Anthropic API and stay exempt, but the pure
+helpers (`_filter_dir_tools`, `_format_survey_block`, `_path_is_safe`,
+`_should_skip_dir`, `_block_to_dict`, `_flush_partial_dir_entry`, etc.) are
+covered by `tests/test_ai_pure.py`.
 
 (Development workflow, branching discipline, and session protocols live in
 `~/.claude/CLAUDE.md`.)
