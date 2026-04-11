@@ -1,0 +1,7 @@
+anthropic
+python-magic
+tree-sitter
+tree-sitter-python
+tree-sitter-javascript
+tree-sitter-rust
+tree-sitter-go

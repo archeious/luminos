@@ -687,7 +687,7 @@ fold into any session that touches these helpers.
   extension sub-section or similar. Low priority, not blocking.
 - **Revisit survey-skip thresholds (#46)** — `_SURVEY_MIN_FILES` and
   `_SURVEY_MIN_DIRS` shipped with values from #7's example, no
-  empirical basis. Once `--ai` has been run on a variety of real
+  empirical basis. Once luminos has been run on a variety of real
   targets, look at which runs skipped the survey vs ran it and decide
   whether the thresholds (or the gate logic itself) need to change.
 
@@ -706,7 +706,7 @@ fold into any session that touches these helpers.
 | `luminos_lib/search.py` | **new** — web_search, fetch_url, package_lookup implementations |
 
 No changes needed to: `tree.py`, `filetypes.py`, `code.py`, `recency.py`,
-`disk.py`, `capabilities.py`, `watch.py`, `ast_parser.py`
+`disk.py`, `ast_parser.py`
 
 ---
 
@@ -798,20 +798,20 @@ agent read, in what order, what it decided to skip). Storing the full message
 history per directory would allow replaying or auditing an investigation. Cost:
 storage. Benefit: debuggability, ability to resume investigations more faithfully.
 
-**Watch mode + incremental investigation**
-Watch mode currently re-runs the full base scan on changes. For AI-augmented
-watch mode: detect which directories changed, re-investigate only those, and
-patch the cache entries. The synthesis would then re-run from the updated cache
-without re-investigating unchanged directories.
+**Live re-investigation mode**
+A "watch" replacement: detect which directories changed, re-investigate only
+those, and patch the cache entries. The synthesis would then re-run from the
+updated cache without re-investigating unchanged directories. The original
+non-AI watch mode was deleted in the #64 scope change because it conflicted
+with the AI-first philosophy. If watch comes back, it comes back as this.
 
-**Optional PDF and Office document readers**
+**PDF and Office document readers**
 The data and documents domains would benefit from native content extraction:
 - `pdfminer` or `pypdf` for PDF text extraction
 - `openpyxl` for Excel schema and sheet enumeration
 - `python-docx` for Word document text
-These would be optional deps like the existing AI deps, gated behind
-`--install-extras`. The agent currently can only see filename and size for
-these formats.
+These slot into `requirements.txt` like any other dependency. The agent
+currently can only see filename and size for these formats.
 
 **Security-focused analysis mode**
 A `--security` flag could tune the investigation toward security-relevant
@@ -873,11 +873,6 @@ investigation to go wrong. A bad survey misleads all subsequent dir loops. A
 bad plan wastes turns on shallow directories and skips critical ones. The system
 needs quality signals — probably the confidence scores aggregated across the
 investigation — to detect when something went wrong and potentially retry.
-
-**Watch mode compatibility**
-Several of the planned features (survey pass, planning, external tools) are not
-designed for incremental re-use in watch mode. Adding AI capability to watch
-mode is a separate design problem that deserves its own thinking.
 
 **Turn budget contention**
 If the planning pass allocates turns and the agent borrows from its budget when

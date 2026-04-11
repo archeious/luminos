@@ -3,11 +3,23 @@
 import hashlib
 import json
 import os
+import shutil
+import sys
 import uuid
 from datetime import datetime, timezone
 
 CACHE_ROOT = "/tmp/luminos"
 INVESTIGATIONS_PATH = os.path.join(CACHE_ROOT, "investigations.json")
+
+
+def clear_cache():
+    """Remove all investigation caches under CACHE_ROOT."""
+    if os.path.isdir(CACHE_ROOT):
+        shutil.rmtree(CACHE_ROOT)
+        print(f"Cleared cache: {CACHE_ROOT}", file=sys.stderr)
+    else:
+        print(f"No cache to clear ({CACHE_ROOT} does not exist).",
+              file=sys.stderr)
 
 
 def _sha256_path(path):

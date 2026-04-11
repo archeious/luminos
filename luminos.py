@@ -16,16 +16,11 @@ from luminos_lib.filetypes import (
 from luminos_lib.code import detect_languages, find_large_files
 from luminos_lib.recency import find_recent_files
 from luminos_lib.disk import get_disk_usage, top_directories
-from luminos_lib.watch import watch_loop
 from luminos_lib.report import format_report
 
 
 def _progress(label):
-    """Return (on_file, finish) for in-place per-file progress on stderr.
-
-    on_file(path) overwrites the current line with the label and truncated path.
-    finish() finalises the line with a newline.
-    """
+    """Return (on_file, finish) for in-place per-file progress on stderr."""
     cols = shutil.get_terminal_size((80, 20)).columns
     prefix = f"  [scan] {label}... "
     available = max(cols - len(prefix), 10)
@@ -43,7 +38,7 @@ def _progress(label):
 
 
 def scan(target, depth=3, show_hidden=False, exclude=None):
-    """Run all analyses on the target directory and return a report dict."""
+    """Run the base scan and return the report dict consumed by the AI pass."""
     report = {}
 
     exclude = exclude or []
@@ -89,7 +84,8 @@ def main():
     parser = argparse.ArgumentParser(
         prog="luminos",
         description="Luminos — file system intelligence tool. "
-                    "Explores a directory and produces a reconnaissance report.",
+                    "Runs an agentic Claude investigation against a directory "
+                    "and produces a reconnaissance report.",
     )
     parser.add_argument("target", nargs="?", help="Target directory to analyze")
     parser.add_argument("-d", "--depth", type=int, default=3,
@@ -100,17 +96,10 @@ def main():
                         help="Output report as JSON")
     parser.add_argument("-o", "--output", metavar="FILE",
                         help="Write report to a file")
-    parser.add_argument("--ai", action="store_true",
-                        help="Use Claude AI to analyze directory purpose "
-                             "(requires ANTHROPIC_API_KEY)")
-    parser.add_argument("--watch", action="store_true",
-                        help="Re-scan every 30 seconds and show diffs")
     parser.add_argument("--clear-cache", action="store_true",
-                        help="Clear the AI investigation cache (/tmp/luminos/)")
+                        help="Clear the investigation cache (/tmp/luminos/)")
     parser.add_argument("--fresh", action="store_true",
-                        help="Force a new AI investigation (ignore cached results)")
-    parser.add_argument("--install-extras", action="store_true",
-                        help="Show status of optional AI dependencies")
+                        help="Force a new investigation (ignore cached results)")
     parser.add_argument("-x", "--exclude", metavar="DIR", action="append",
                         default=[],
                         help="Exclude a directory name from scan and analysis "
@@ -118,15 +107,8 @@ def main():
 
     args = parser.parse_args()
 
-    # --install-extras: show package status and exit
-    if args.install_extras:
-        from luminos_lib.capabilities import print_status
-        print_status()
-        return
-
-    # --clear-cache: wipe /tmp/luminos/ (lazy import to avoid AI deps)
     if args.clear_cache:
-        from luminos_lib.capabilities import clear_cache
+        from luminos_lib.cache import clear_cache
         clear_cache()
         if not args.target:
             return
@@ -140,25 +122,24 @@ def main():
               file=sys.stderr)
         sys.exit(1)
 
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        print("luminos requires ANTHROPIC_API_KEY. "
+              "Set it with: export ANTHROPIC_API_KEY=your-key-here",
+              file=sys.stderr)
+        sys.exit(0)
+
     if args.exclude:
         print(f"  [scan] Excluding: {', '.join(args.exclude)}", file=sys.stderr)
-
-    if args.watch:
-        watch_loop(target, depth=args.depth, show_hidden=args.all,
-                   json_output=args.json_output)
-        return
 
     report = scan(target, depth=args.depth, show_hidden=args.all,
                   exclude=args.exclude)
 
-    flags = []
-    if args.ai:
-        from luminos_lib.ai import analyze_directory
-        brief, detailed, flags = analyze_directory(
-            report, target, fresh=args.fresh, exclude=args.exclude)
-        report["ai_brief"] = brief
-        report["ai_detailed"] = detailed
-        report["flags"] = flags
+    from luminos_lib.ai import analyze_directory
+    brief, detailed, flags = analyze_directory(
+        report, target, fresh=args.fresh, exclude=args.exclude)
+    report["ai_brief"] = brief
+    report["ai_detailed"] = detailed
+    report["flags"] = flags
 
     if args.json_output:
         output = json.dumps(report, indent=2, default=str)

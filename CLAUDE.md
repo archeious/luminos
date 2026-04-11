@@ -19,9 +19,11 @@
 
 ## Project Overview
 
-Luminos is a file system intelligence tool — a zero-dependency Python CLI that
-scans a directory and produces a reconnaissance report. With `--ai` it runs a
-multi-pass agentic investigation via the Claude API.
+Luminos is a file system intelligence tool. Point it at a directory and it
+runs a multi-pass agentic investigation via the Claude API: a survey pass,
+isolated dir-loop agents per directory, and a synthesis pass that produces a
+project-level verdict with severity-ranked flags. A lightweight base scan
+runs first to feed the agent its initial picture of the target.
 
 ---
 
@@ -32,8 +34,7 @@ multi-pass agentic investigation via the Claude API.
 | `luminos.py` | Entry point — arg parsing, scan(), main() |
 | `luminos_lib/ai.py` | Multi-pass agentic analysis via Claude API |
 | `luminos_lib/ast_parser.py` | tree-sitter code structure parsing |
-| `luminos_lib/cache.py` | Investigation cache management |
-| `luminos_lib/capabilities.py` | Optional dep detection, cache cleanup |
+| `luminos_lib/cache.py` | Investigation cache management (incl. clear_cache) |
 | `luminos_lib/code.py` | Language detection, LOC counting |
 | `luminos_lib/disk.py` | Per-directory disk usage |
 | `luminos_lib/filetypes.py` | File classification (7 categories) |
@@ -41,7 +42,6 @@ multi-pass agentic investigation via the Claude API.
 | `luminos_lib/recency.py` | Recently modified files |
 | `luminos_lib/report.py` | Terminal report formatter |
 | `luminos_lib/tree.py` | Directory tree visualization |
-| `luminos_lib/watch.py` | Watch mode with snapshot diffing |
 
 Details: wiki — [Architecture](https://forgejo.labbity.unbiasedgeek.com/archeious/luminos/wiki/Architecture) | [Development Guide](https://forgejo.labbity.unbiasedgeek.com/archeious/luminos/wiki/DevelopmentGuide)
 
@@ -49,32 +49,36 @@ Details: wiki — [Architecture](https://forgejo.labbity.unbiasedgeek.com/archei
 
 ## Key Constraints
 
-- **Base tool: no pip dependencies.** tree, filetypes, code, disk, recency,
-  report, watch use only stdlib and GNU coreutils. Must always work on bare Python 3.
-- **AI deps are lazy.** `anthropic`, `tree-sitter`, `python-magic` imported only
-  when `--ai` is used. Missing packages produce a clear install error.
+- **AI investigation is the product.** The base scan exists to feed the agent.
+  There is no `--ai` flag and no `--no-ai` mode. AI runs unconditionally on
+  every invocation.
+- **Anthropic API key is required.** If `ANTHROPIC_API_KEY` is unset, luminos
+  exits cleanly (exit 0) with a one-line hint instead of running.
+- **Dependencies installed via `requirements.txt`.** anthropic, tree-sitter +
+  grammars, and python-magic are normal pip dependencies, not lazy imports.
+  `setup_env.sh` creates a venv and installs them.
 - **Subprocess for OS tools.** LOC counting, file detection, disk usage, and
   recency shell out to GNU coreutils. Do not reimplement in pure Python.
 - **Graceful degradation everywhere.** Permission denied, subprocess timeouts,
-  missing API key — all handled without crashing.
+  individual dir-loop failures — all handled without crashing the run.
 
 ---
 
 ## Running Luminos
 
 ```bash
-# Base scan
-python3 luminos.py <target>
-
-# With AI analysis (requires ANTHROPIC_API_KEY)
+# Activate the venv (one-time setup: ./setup_env.sh)
 source ~/luminos-env/bin/activate
-python3 luminos.py --ai <target>
+export ANTHROPIC_API_KEY=your-key-here
+
+# Run an investigation
+python3 luminos.py <target>
 
 # Common flags
 python3 luminos.py -d 8 -a -x .git -x node_modules <target>
 python3 luminos.py --json -o report.json <target>
-python3 luminos.py --watch <target>
-python3 luminos.py --install-extras
+python3 luminos.py --fresh <target>
+python3 luminos.py --clear-cache
 ```
 
 ---
@@ -83,8 +87,7 @@ python3 luminos.py --install-extras
 
 Run tests with `python3 -m unittest discover -s tests/`. Modules exempt from
 unit testing: `ai.py` (requires live API), `ast_parser.py` (requires
-tree-sitter), `watch.py` (stateful events), `prompts.py` (string templates
-only).
+tree-sitter grammars at import time), `prompts.py` (string templates only).
 
 (Development workflow, branching discipline, and session protocols live in
 `~/.claude/CLAUDE.md`.)
@@ -99,7 +102,7 @@ only).
 | Classes | PascalCase | `_TokenTracker`, `_CacheManager` |
 | Constants | UPPER_SNAKE_CASE | `MAX_CONTEXT`, `CACHE_ROOT` |
 | Module files | snake_case | `ast_parser.py` |
-| CLI flags | kebab-case | `--clear-cache`, `--install-extras` |
+| CLI flags | kebab-case | `--clear-cache`, `--fresh` |
 | Private functions | leading underscore | `_run_synthesis` |
 
 ---
