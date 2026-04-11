@@ -11,8 +11,8 @@
 ## Current Project State
 
 - **Phase:** Active development — Phase 1 + 2 + 2.5 complete; Phase 3 (investigation planning) ready to start
-- **Last worked on:** 2026-04-07
-- **Last commit:** merge: fix/issue-54-write-cache-tool-desc
+- **Last worked on:** 2026-04-11
+- **Last commit:** Merge pull request 'feat: AI investigation is the product, drop zero-dep constraint (#64)' (#65)
 - **Blocking:** None
 
 ---
@@ -114,5 +114,6 @@ tree-sitter grammars at import time), `prompts.py` (string templates only).
 | 6 | 2026-04-07 | Extracted shared workflow/branching/protocols from project CLAUDE.md to global `~/.claude/CLAUDE.md`; moved externalize.md and wrap-up.md to `~/.claude/protocols/` |
 | 7 | 2026-04-07 | Phase 1 audit — closed #1 (only #54 remains); gitea MCP credential overhaul: dedicated `claude-code` Forgejo user, admin on luminos, write+delete verified end-to-end |
 | 8 | 2026-04-07 | Closed #54 — added confidence/confidence_reason to write_cache tool schema description; Phase 1 milestone now 4/4 complete |
+| 9 | 2026-04-11 | Scope shift (#64): AI investigation is the product, zero-dep constraint dropped, watch mode + capabilities.py deleted, requirements.txt added, README/CLAUDE/PLAN/wiki rewritten |
 
 Full log: wiki — [Session Retrospectives](https://forgejo.labbity.unbiasedgeek.com/archeious/luminos/wiki/SessionRetrospectives)
