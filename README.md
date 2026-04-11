@@ -1,55 +1,38 @@
 # Luminos
 
-A file system intelligence tool. Scans a directory and produces a reconnaissance report that tells you what the directory is, what's in it, and what might be worth your attention.
+A file system intelligence tool. Point it at a directory and it runs an agentic Claude investigation that figures out what the directory is, what's in it, and what might be worth your attention.
 
-Luminos has two modes. The **base mode** is a single Python file that uses only the standard library and GNU coreutils. No pip install, no virtual environment, no dependencies to audit. The **`--ai` mode** runs a multi-pass agentic investigation against the [Claude API](https://www.anthropic.com/api) to reason about what the project actually does and flag anything that looks off. AI mode is opt-in and is the only path that requires pip-installable packages.
+Luminos is built around a harder question than "what files are here?" It is built around "what is this, and should I be worried about any of it?" To answer that, it runs a multi-pass agentic investigation against the [Claude API](https://www.anthropic.com/api): a survey pass to orient on the target, an isolated dir-loop agent per directory with a small toolbelt (read files, run whitelisted coreutils commands, write cache entries), and a final synthesis pass that produces a project-level verdict with severity-ranked flags.
 
-## Why
-
-Most "repo explorer" tools answer one question: "what files are here?" Luminos is built around a harder question: "what is this, and should I be worried about any of it?"
-
-The base scan gives you the mechanical answer: directory tree, file classification across seven categories, language breakdown with line counts, recently modified files, disk usage, and the largest files. That is usually enough for a quick "what is this" look.
-
-The AI mode goes further. It runs an isolated investigation per directory, leaves-first, with a small toolbelt (read files, run whitelisted coreutils commands, write cache entries) and a per-directory context budget. Each directory gets its own summary, and a final synthesis pass reads only the directory-level cache entries to produce a whole-project verdict. Findings are flagged with a severity level (`critical`, `concern`, or `info`) so the important stuff floats to the top.
+A lightweight base scan runs first to feed the agent its initial picture of the target. The base scan is not a standalone product, it is the first step of the investigation.
 
 ## Features
 
-- **Zero dependencies in base mode.** Runs on bare Python 3 plus the GNU coreutils you already have.
-- **Graceful degradation everywhere.** Permission denied, subprocess timeouts, missing API key, missing optional packages: all handled without crashing the scan.
-- **Directory tree.** Visual tree with configurable depth and exclude patterns.
-- **File classification.** Files bucketed into seven categories (code, config, docs, data, media, binary, other) via `file(1)` magic.
-- **Language detection and LOC counting.** Which languages are present, how many lines of code per language.
-- **Recently modified files.** Surface the files most likely to reflect current activity.
-- **Disk usage.** Per-directory disk usage with top offenders called out.
-- **Watch mode.** Re-scan every 30 seconds and show diffs.
-- **JSON output.** Pipe reports to other tools or save for comparison.
-- **AI investigation (opt-in).** Multi-pass, leaves-first agentic analysis via Claude, with an investigation cache so repeat runs are cheap.
+- **Agentic AI investigation.** Multi-pass, leaves-first analysis via Claude. Survey then dir loops then synthesis.
+- **Investigation cache.** Per-file and per-directory summaries are cached under `/tmp/luminos/` so repeat runs on the same target are cheap.
 - **Severity-ranked flags.** Findings are sorted so `critical` items are the first thing you see.
+- **Context budget guard.** Per-turn `input_tokens` is watched against a budget so a rogue directory can't blow the context and silently degrade quality.
+- **Graceful degradation.** Permission denied, subprocess timeouts, missing API key: all handled without crashing.
+- **JSON output.** Pipe reports to other tools or save for comparison.
 
 ## Installation
 
-### Base mode
-
-No installation required. Clone and run.
+Luminos is a normal Python project. Clone, create a venv, and install from `requirements.txt`. The repository ships a helper script that does this for you:
 
 ```bash
 git clone https://github.com/archeious/luminos.git
 cd luminos
-python3 luminos.py <target>
-```
-
-Works on any system with Python 3 and standard GNU coreutils (`wc`, `file`, `grep`, `head`, `tail`, `stat`, `du`, `find`).
-
-### AI mode
-
-AI mode needs a few pip-installable packages. The project ships a helper script that creates a dedicated virtual environment and installs them:
-
-```bash
 ./setup_env.sh
 source ~/luminos-env/bin/activate
 ```
 
-The packages installed are `anthropic`, `tree-sitter`, a handful of tree-sitter language grammars, and `python-magic`.
+Or do it by hand:
+
+```bash
+python3 -m venv ~/luminos-env
+source ~/luminos-env/bin/activate
+pip install -r requirements.txt
+```
 
 You also need an Anthropic API key exported as an environment variable:
 
@@ -57,25 +40,15 @@ You also need an Anthropic API key exported as an environment variable:
 export ANTHROPIC_API_KEY=your-key-here
 ```
 
-Check which optional dependencies are present:
-
-```bash
-python3 luminos.py --install-extras
-```
+The base scan shells out to a handful of GNU coreutils (`wc`, `file`, `grep`, `head`, `tail`, `stat`, `du`, `find`), so you also need those on `$PATH`. They are installed by default on every mainstream Linux distribution and on macOS via Homebrew.
 
 ## Usage
-
-### Base scan
 
 ```bash
 python3 luminos.py /path/to/project
 ```
 
-### AI scan
-
-```bash
-python3 luminos.py --ai /path/to/project
-```
+That is the whole interface. The investigation runs end to end and prints a report.
 
 ### Common flags
 
@@ -86,28 +59,25 @@ python3 luminos.py -d 8 -a -x .git -x node_modules -x vendor /path/to/project
 # JSON output to a file
 python3 luminos.py --json -o report.json /path/to/project
 
-# Watch mode (re-scan every 30s, show diffs)
-python3 luminos.py --watch /path/to/project
+# Force a fresh investigation, ignoring the cache
+python3 luminos.py --fresh /path/to/project
 
-# Force a fresh AI investigation, ignoring the cache
-python3 luminos.py --ai --fresh /path/to/project
-
-# Clear the AI investigation cache
+# Clear the investigation cache
 python3 luminos.py --clear-cache
 ```
 
 Run `python3 luminos.py --help` for the full flag list.
 
-## How AI mode works
+## How the investigation works
 
-A short version of what happens when you pass `--ai`:
+A short version of what happens on every run:
 
-1. **Discover** every directory under the target.
-2. **Sort leaves-first** so the deepest directories are investigated before their parents.
-3. **Run an isolated agent loop per directory** with a max of 10 turns each. The agent has a small toolbelt: read files, run whitelisted coreutils commands (`wc`, `file`, `grep`, `head`, `tail`, `stat`, `du`, `find`), and write cache entries.
-4. **Cache everything.** Each file and directory summary is written to `/tmp/luminos/` so that subsequent runs on the same target don't burn tokens re-deriving things that haven't changed.
-5. **Context budget guard.** Per-turn `input_tokens` is watched against a budget (currently 70% of the model's context window) so a rogue directory can't blow the context and silently degrade quality.
-6. **Final synthesis pass** reads only the directory-level cache entries (not the raw files) to produce a project-level summary and the severity-ranked flags.
+1. **Base scan.** Builds the directory tree, classifies files into seven categories, counts lines of code, finds large and recently modified files, computes per-directory disk usage. This is the agent's initial picture of the target.
+2. **Survey pass.** A short agent loop (max 3 turns) reads the base scan, describes the target in plain language, and decides which investigation tools are relevant. Tiny targets skip the survey.
+3. **Dir loops.** Every directory gets its own isolated agent loop, leaves-first, with up to 14 turns. The agent has read-only access to the filesystem and a toolbelt of `read_file`, `list_directory`, `run_command`, `parse_structure`, `write_cache`, `think`, `checkpoint`, `flag`, and `submit_report`.
+4. **Cache.** Each file and directory summary is written to `/tmp/luminos/` so subsequent runs on the same target don't re-derive what hasn't changed.
+5. **Context budget guard.** Per-turn `input_tokens` is watched against a budget (currently 70% of the model's context window) so a rogue directory can't blow the context window.
+6. **Final synthesis.** A short agent loop reads the directory-level cache entries (not the raw files) and produces the project-level brief, the detailed analysis, and the severity-ranked flags.
 
 ## Development
 
@@ -117,11 +87,10 @@ Run the test suite:
 python3 -m unittest discover -s tests/
 ```
 
-Modules that are intentionally not unit tested and why:
+Modules that are intentionally not unit tested:
 
-- `luminos_lib/ai.py`: requires a live Anthropic API, tested in practice
+- `luminos_lib/ai.py`: requires a live Anthropic API, exercised in practice
 - `luminos_lib/ast_parser.py`: requires tree-sitter grammars installed
-- `luminos_lib/watch.py`: stateful event loop, tested manually
 - `luminos_lib/prompts.py`: string templates only
 
 ## License

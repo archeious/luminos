@@ -21,7 +21,6 @@ import anthropic
 import magic
 from luminos_lib.ast_parser import parse_structure
 from luminos_lib.cache import _CacheManager, _get_investigation_id
-from luminos_lib.capabilities import check_ai_dependencies
 from luminos_lib.prompts import (
     _DIR_SYSTEM_PROMPT,
     _SURVEY_SYSTEM_PROMPT,
@@ -1414,11 +1413,8 @@ def analyze_directory(report, target, verbose_tools=False, fresh=False,
                       exclude=None):
     """Run AI analysis on the directory. Returns (brief, detailed, flags).
 
-    Returns ("", "", []) if the API key is missing or dependencies are not met.
+    Returns ("", "", []) if the API key is missing.
     """
-    if not check_ai_dependencies():
-        sys.exit(1)
-
     api_key = _get_api_key()
     if not api_key:
         return "", "", []
