@@ -10,10 +10,11 @@
 
 ## Current Project State
 
-- **Phase:** Active development — Phase 1 + 2 + 2.5 complete; Phase 3 (investigation planning) ready to start
+- **Phase:** Active development — Phases 1, 2, 2.5, 2.6, 2.7, 2.8 complete. Phase 3 (investigation planning) ready to start. First task of Phase 3: write the planning pass design sketch (deferred from Session 9 prep).
 - **Last worked on:** 2026-04-11
-- **Last commit:** Merge pull request 'feat: AI investigation is the product, drop zero-dep constraint (#64)' (#65)
+- **Last commit:** Merge pull request 'test(ai): cover _TokenTracker, _synthesize_from_cache, _discover_directories (#70)' (#71)
 - **Blocking:** None
+- **Test count:** 234 passing
 
 ---
 
@@ -115,9 +116,8 @@ covered by `tests/test_ai_pure.py`.
 
 | # | Date | Summary |
 |---|---|---|
-| 6 | 2026-04-07 | Extracted shared workflow/branching/protocols from project CLAUDE.md to global `~/.claude/CLAUDE.md`; moved externalize.md and wrap-up.md to `~/.claude/protocols/` |
 | 7 | 2026-04-07 | Phase 1 audit — closed #1 (only #54 remains); gitea MCP credential overhaul: dedicated `claude-code` Forgejo user, admin on luminos, write+delete verified end-to-end |
 | 8 | 2026-04-07 | Closed #54 — added confidence/confidence_reason to write_cache tool schema description; Phase 1 milestone now 4/4 complete |
-| 9 | 2026-04-11 | Scope shift (#64): AI investigation is the product, zero-dep constraint dropped, watch mode + capabilities.py deleted, requirements.txt added, README/CLAUDE/PLAN/wiki rewritten |
+| 9 | 2026-04-11 | Scope shift (#64) + ALL Phase 3 prereqs: dir loop refactor (#57), tool registry consolidation (#56), pure-helper test coverage waves 1+2 (#55, #70), leaf-first contract docs (#72). 6 PRs, 70 net new tests (164→234), Phase 2.6/2.7/2.8 milestones complete |
 
 Full log: wiki — [Session Retrospectives](https://forgejo.labbity.unbiasedgeek.com/archeious/luminos/wiki/SessionRetrospectives)
