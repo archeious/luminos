@@ -10,11 +10,11 @@
 
 ## Current Project State
 
-- **Phase:** Active development — Phases 1, 2, 2.5, 2.6, 2.7, 2.8 complete. Phase 3 (investigation planning) ready to start. First task of Phase 3: write the planning pass design sketch (deferred from Session 9 prep).
-- **Last worked on:** 2026-04-11
-- **Last commit:** Merge pull request 'test(ai): cover _TokenTracker, _synthesize_from_cache, _discover_directories (#70)' (#71)
+- **Phase:** Active development — Phases 1, 2, 2.5, 2.6, 2.7, 2.8, 3 complete. Next: fix #78 (synthesis persistence), #79 (stale cache), then reassess Phase 4+ (#40).
+- **Last worked on:** 2026-04-12
+- **Last commit:** fix(ai): match target root by basename in _apply_plan() (#76)
 - **Blocking:** None
-- **Test count:** 234 passing
+- **Test count:** 262 passing
 
 ---
 
@@ -116,8 +116,8 @@ covered by `tests/test_ai_pure.py`.
 
 | # | Date | Summary |
 |---|---|---|
-| 7 | 2026-04-07 | Phase 1 audit — closed #1 (only #54 remains); gitea MCP credential overhaul: dedicated `claude-code` Forgejo user, admin on luminos, write+delete verified end-to-end |
 | 8 | 2026-04-07 | Closed #54 — added confidence/confidence_reason to write_cache tool schema description; Phase 1 milestone now 4/4 complete |
 | 9 | 2026-04-11 | Scope shift (#64) + ALL Phase 3 prereqs: dir loop refactor (#57), tool registry consolidation (#56), pure-helper test coverage waves 1+2 (#55, #70), leaf-first contract docs (#72). 6 PRs, 70 net new tests (164→234), Phase 2.6/2.7/2.8 milestones complete |
+| 10 | 2026-04-12 | Phase 3 shipped: planning pass, dynamic turn allocation, quality instrumentation (#8, #9, #10, #11, #74). Fixed root-path matching bug (#76). Smoke tests on luminos + homelab IaC. Filed #78 (synthesis persistence), #79 (stale cache). 3 PRs, 28 new tests (234→262) |
 
 Full log: wiki — [Session Retrospectives](https://forgejo.labbity.unbiasedgeek.com/archeious/luminos/wiki/SessionRetrospectives)
