@@ -14,20 +14,28 @@ from types import SimpleNamespace
 
 from luminos_lib.ai import (
     CONTEXT_BUDGET,
+    _DEFAULT_TURNS,
     _DIR_TOOLS,
+    _MAX_TURNS_CEILING,
+    _PLANNING_TOOLS,
     _PROTECTED_DIR_TOOLS,
+    _SHALLOW_TURNS,
     _SURVEY_CONFIDENCE_THRESHOLD,
     _TokenTracker,
+    _apply_plan,
     _block_to_dict,
+    _default_plan,
     _default_survey,
     _discover_directories,
     _filter_dir_tools,
     _flush_partial_dir_entry,
     _format_survey_block,
     _format_survey_signals,
+    _get_child_summaries,
     _path_is_safe,
     _should_skip_dir,
     _synthesize_from_cache,
+    _write_plan_evaluation,
 )
 from luminos_lib.cache import _CacheManager
 
@@ -715,6 +723,343 @@ class TestDiscoverDirectories(unittest.TestCase):
         result = _discover_directories(self.target, show_hidden=True)
         rels = [os.path.relpath(d, self.target) for d in result]
         self.assertNotIn(".git", rels)
+
+
+# ---------------------------------------------------------------------------
+# _default_plan
+# ---------------------------------------------------------------------------
+
+class TestDefaultPlan(unittest.TestCase):
+    def test_returns_empty_plan(self):
+        plan = _default_plan()
+        self.assertEqual(plan["priority_dirs"], [])
+        self.assertEqual(plan["shallow_dirs"], [])
+        self.assertEqual(plan["skip_dirs"], [])
+        self.assertEqual(plan["investigation_order"], "leaf-first")
+        self.assertEqual(plan["notes"], "")
+
+    def test_returns_fresh_dict_each_call(self):
+        a = _default_plan()
+        b = _default_plan()
+        self.assertIsNot(a, b)
+        a["notes"] = "mutated"
+        self.assertEqual(b["notes"], "")
+
+
+# ---------------------------------------------------------------------------
+# _apply_plan
+# ---------------------------------------------------------------------------
+
+class TestApplyPlan(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.target = self.tmp
+        # Create directories: a/x, a/y, b, c (leaves first in sorted order)
+        for p in ["a/x", "a/y", "b", "c"]:
+            os.makedirs(os.path.join(self.tmp, p), exist_ok=True)
+        # all_dirs sorted leaf-first (deepest first, then alphabetical)
+        self.all_dirs = [
+            os.path.join(self.tmp, "a", "x"),
+            os.path.join(self.tmp, "a", "y"),
+            os.path.join(self.tmp, "a"),
+            os.path.join(self.tmp, "b"),
+            os.path.join(self.tmp, "c"),
+            self.tmp,
+        ]
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_none_plan_returns_original_order(self):
+        ordered, turn_map = _apply_plan(
+            self.all_dirs, list(self.all_dirs), None, self.target,
+        )
+        self.assertEqual(ordered, self.all_dirs)
+        self.assertEqual(turn_map, {})
+
+    def test_default_plan_returns_original_order(self):
+        plan = _default_plan()
+        ordered, turn_map = _apply_plan(
+            self.all_dirs, list(self.all_dirs), plan, self.target,
+        )
+        self.assertEqual(ordered, self.all_dirs)
+        self.assertEqual(turn_map, {})
+
+    def test_skip_dirs_removed(self):
+        plan = _default_plan()
+        plan["skip_dirs"] = [{"path": "b", "reason": "vendored"}]
+        ordered, turn_map = _apply_plan(
+            self.all_dirs, list(self.all_dirs), plan, self.target,
+        )
+        b_path = os.path.join(self.tmp, "b")
+        self.assertNotIn(b_path, ordered)
+
+    def test_priority_dirs_get_custom_turns(self):
+        plan = _default_plan()
+        plan["priority_dirs"] = [
+            {"path": "a", "reason": "core", "suggested_turns": 18},
+        ]
+        ordered, turn_map = _apply_plan(
+            self.all_dirs, list(self.all_dirs), plan, self.target,
+        )
+        a_path = os.path.join(self.tmp, "a")
+        self.assertEqual(turn_map[a_path], 18)
+
+    def test_priority_turns_capped_at_ceiling(self):
+        plan = _default_plan()
+        plan["priority_dirs"] = [
+            {"path": "a", "reason": "core", "suggested_turns": 50},
+        ]
+        _, turn_map = _apply_plan(
+            self.all_dirs, list(self.all_dirs), plan, self.target,
+        )
+        a_path = os.path.join(self.tmp, "a")
+        self.assertEqual(turn_map[a_path], _MAX_TURNS_CEILING)
+
+    def test_shallow_dirs_get_shallow_turns(self):
+        plan = _default_plan()
+        plan["shallow_dirs"] = [{"path": "c", "reason": "docs only"}]
+        _, turn_map = _apply_plan(
+            self.all_dirs, list(self.all_dirs), plan, self.target,
+        )
+        c_path = os.path.join(self.tmp, "c")
+        self.assertEqual(turn_map[c_path], _SHALLOW_TURNS)
+
+    def test_priority_first_reorders_bands(self):
+        plan = _default_plan()
+        plan["investigation_order"] = "priority-first"
+        plan["priority_dirs"] = [
+            {"path": "c", "reason": "entry point", "suggested_turns": 15},
+        ]
+        plan["shallow_dirs"] = [{"path": "b", "reason": "tests"}]
+        ordered, _ = _apply_plan(
+            self.all_dirs, list(self.all_dirs), plan, self.target,
+        )
+        c_path = os.path.join(self.tmp, "c")
+        b_path = os.path.join(self.tmp, "b")
+        # Priority dirs come before shallow dirs.
+        self.assertLess(ordered.index(c_path), ordered.index(b_path))
+
+    def test_leaf_first_preserved_within_priority_band(self):
+        plan = _default_plan()
+        plan["investigation_order"] = "priority-first"
+        plan["priority_dirs"] = [
+            {"path": os.path.join("a", "x"), "reason": "deep",
+             "suggested_turns": 15},
+            {"path": "a", "reason": "parent", "suggested_turns": 15},
+        ]
+        ordered, _ = _apply_plan(
+            self.all_dirs, list(self.all_dirs), plan, self.target,
+        )
+        ax_path = os.path.join(self.tmp, "a", "x")
+        a_path = os.path.join(self.tmp, "a")
+        # a/x (leaf) comes before a (parent), preserving leaf-first.
+        self.assertLess(ordered.index(ax_path), ordered.index(a_path))
+
+    def test_unknown_paths_in_plan_ignored(self):
+        plan = _default_plan()
+        plan["skip_dirs"] = [{"path": "nonexistent", "reason": "gone"}]
+        plan["priority_dirs"] = [
+            {"path": "also_missing", "reason": "?", "suggested_turns": 20},
+        ]
+        ordered, turn_map = _apply_plan(
+            self.all_dirs, list(self.all_dirs), plan, self.target,
+        )
+        # All original dirs still present, no crash.
+        self.assertEqual(len(ordered), len(self.all_dirs))
+        self.assertEqual(turn_map, {})
+
+    def test_to_investigate_subset_respected(self):
+        """Only dirs in to_investigate appear in output, even if plan mentions all."""
+        plan = _default_plan()
+        subset = self.all_dirs[:3]
+        ordered, _ = _apply_plan(
+            self.all_dirs, subset, plan, self.target,
+        )
+        self.assertEqual(len(ordered), len(subset))
+
+
+# ---------------------------------------------------------------------------
+# _get_child_summaries (updated placeholder behavior)
+# ---------------------------------------------------------------------------
+
+class TestGetChildSummaries(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.cache = _make_manager(self.tmp)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_leaf_directory_no_subdirs(self):
+        leaf = os.path.join(self.tmp, "leaf")
+        os.makedirs(leaf)
+        result = _get_child_summaries(leaf, self.cache)
+        self.assertIn("leaf directory", result)
+        self.assertNotIn("not been investigated", result)
+
+    def test_parent_with_uninvestigated_children(self):
+        parent = os.path.join(self.tmp, "parent")
+        child = os.path.join(parent, "child")
+        os.makedirs(child)
+        result = _get_child_summaries(parent, self.cache)
+        self.assertIn("not been investigated", result)
+        self.assertNotIn("leaf directory", result)
+
+    def test_parent_with_cached_children(self):
+        parent = os.path.join(self.tmp, "parent")
+        child = os.path.join(parent, "child")
+        os.makedirs(child)
+        self.cache.write_entry("dir", child, {
+            "path": child,
+            "relative_path": "parent/child",
+            "child_count": 0,
+            "summary": "A child directory with stuff.",
+            "dominant_category": "source",
+            "notable_files": [],
+            "cached_at": "2026-01-01T00:00:00+00:00",
+        })
+        result = _get_child_summaries(parent, self.cache)
+        self.assertIn("parent/child/", result)
+        self.assertIn("A child directory with stuff.", result)
+
+    def test_hidden_dirs_ignored(self):
+        parent = os.path.join(self.tmp, "parent")
+        os.makedirs(os.path.join(parent, ".hidden"))
+        result = _get_child_summaries(parent, self.cache)
+        # .hidden is ignored, so this looks like a leaf.
+        self.assertIn("leaf directory", result)
+
+
+# ---------------------------------------------------------------------------
+# _TokenTracker._loop_turns
+# ---------------------------------------------------------------------------
+
+class TestTokenTrackerLoopTurns(unittest.TestCase):
+    def test_loop_turns_increments_on_record(self):
+        t = _TokenTracker()
+        self.assertEqual(t._loop_turns, 0)
+        t.record(SimpleNamespace(input_tokens=100, output_tokens=50))
+        self.assertEqual(t._loop_turns, 1)
+        t.record(SimpleNamespace(input_tokens=200, output_tokens=75))
+        self.assertEqual(t._loop_turns, 2)
+
+    def test_loop_turns_reset(self):
+        t = _TokenTracker()
+        t.record(SimpleNamespace(input_tokens=100, output_tokens=50))
+        t.record(SimpleNamespace(input_tokens=200, output_tokens=75))
+        self.assertEqual(t._loop_turns, 2)
+        t.reset_loop()
+        self.assertEqual(t._loop_turns, 0)
+
+    def test_loop_turns_independent_of_totals(self):
+        t = _TokenTracker()
+        t.record(SimpleNamespace(input_tokens=100, output_tokens=50))
+        t.reset_loop()
+        t.record(SimpleNamespace(input_tokens=300, output_tokens=100))
+        self.assertEqual(t._loop_turns, 1)
+        self.assertEqual(t.total_input, 400)
+
+
+# ---------------------------------------------------------------------------
+# _write_plan_evaluation
+# ---------------------------------------------------------------------------
+
+class TestWritePlanEvaluation(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.cache = _make_manager(self.tmp)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_writes_evaluation_file(self):
+        plan = {
+            "priority_dirs": [
+                {"path": "src", "reason": "core", "suggested_turns": 18},
+            ],
+            "shallow_dirs": [
+                {"path": "docs", "reason": "docs"},
+            ],
+            "skip_dirs": [],
+            "investigation_order": "leaf-first",
+            "notes": "",
+        }
+        utilization = [
+            {"dir": "src", "turns_allocated": 18, "turns_used": 12,
+             "completeness": 0.85},
+            {"dir": "docs", "turns_allocated": 5, "turns_used": 3,
+             "completeness": 0.7},
+        ]
+        _write_plan_evaluation(self.cache, plan, utilization)
+
+        import json
+        eval_path = os.path.join(self.cache.root, "plan_evaluation.json")
+        self.assertTrue(os.path.exists(eval_path))
+        with open(eval_path) as f:
+            data = json.load(f)
+        self.assertEqual(data["total_dirs_investigated"], 2)
+        self.assertEqual(data["total_turns_allocated"], 23)
+        self.assertEqual(data["total_turns_used"], 15)
+        self.assertEqual(len(data["per_directory"]), 2)
+        # Check that tier classification came through.
+        src_entry = [d for d in data["per_directory"] if d["dir"] == "src"][0]
+        self.assertEqual(src_entry["planned_tier"], "priority")
+        self.assertEqual(src_entry["completeness"], 0.85)
+
+    def test_handles_none_plan(self):
+        utilization = [
+            {"dir": "a", "turns_allocated": 10, "turns_used": 8},
+        ]
+        _write_plan_evaluation(self.cache, None, utilization)
+        eval_path = os.path.join(self.cache.root, "plan_evaluation.json")
+        self.assertTrue(os.path.exists(eval_path))
+
+    def test_handles_empty_utilization(self):
+        plan = _default_plan()
+        _write_plan_evaluation(self.cache, plan, [])
+        import json
+        eval_path = os.path.join(self.cache.root, "plan_evaluation.json")
+        with open(eval_path) as f:
+            data = json.load(f)
+        self.assertEqual(data["total_dirs_investigated"], 0)
+        self.assertEqual(data["overall_utilization"], 0)
+
+    def test_zero_allocated_turns_no_division_error(self):
+        plan = _default_plan()
+        utilization = [
+            {"dir": "x", "turns_allocated": 0, "turns_used": 0},
+        ]
+        _write_plan_evaluation(self.cache, plan, utilization)
+        import json
+        eval_path = os.path.join(self.cache.root, "plan_evaluation.json")
+        with open(eval_path) as f:
+            data = json.load(f)
+        self.assertEqual(data["per_directory"][0]["utilization"], 0)
+
+
+# ---------------------------------------------------------------------------
+# Planning tool registry
+# ---------------------------------------------------------------------------
+
+class TestPlanningToolRegistry(unittest.TestCase):
+    def test_submit_plan_registered(self):
+        names = [t["name"] for t in _PLANNING_TOOLS]
+        self.assertIn("submit_plan", names)
+
+    def test_submit_plan_has_required_fields(self):
+        tool = [t for t in _PLANNING_TOOLS if t["name"] == "submit_plan"][0]
+        required = tool["input_schema"]["required"]
+        self.assertIn("priority_dirs", required)
+        self.assertIn("shallow_dirs", required)
+        self.assertIn("skip_dirs", required)
+        self.assertIn("investigation_order", required)
+        self.assertIn("notes", required)
+
+    def test_submit_plan_order_enum(self):
+        tool = [t for t in _PLANNING_TOOLS if t["name"] == "submit_plan"][0]
+        order_prop = tool["input_schema"]["properties"]["investigation_order"]
+        self.assertEqual(order_prop["enum"], ["leaf-first", "priority-first"])
 
 
 if __name__ == "__main__":
