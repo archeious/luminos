@@ -1549,21 +1549,29 @@ def _apply_plan(all_dirs, to_investigate, plan, target):
         return list(to_investigate), {}
 
     # Build lookup from relative path to absolute path.
+    # The target root maps to "." via relpath, but the planner sees
+    # basename(target) in the tree output and uses that as the path.
+    # Register both so either form matches (#76).
     rel_to_abs = {}
     for d in all_dirs:
         rel = os.path.relpath(d, target)
         rel_to_abs[rel] = d
+        if rel == ".":
+            rel_to_abs[os.path.basename(d)] = d
 
     # Classify directories by tier.
     skip_set = set()
     priority_set = set()
     shallow_set = set()
     turn_map = {}
+    unmatched = []
 
     for entry in plan.get("skip_dirs", []):
         rel = entry.get("path", "")
         if rel in rel_to_abs:
             skip_set.add(rel_to_abs[rel])
+        else:
+            unmatched.append(rel)
 
     for entry in plan.get("priority_dirs", []):
         rel = entry.get("path", "")
@@ -1573,6 +1581,8 @@ def _apply_plan(all_dirs, to_investigate, plan, target):
             abs_path = rel_to_abs[rel]
             priority_set.add(abs_path)
             turn_map[abs_path] = capped
+        else:
+            unmatched.append(rel)
 
     for entry in plan.get("shallow_dirs", []):
         rel = entry.get("path", "")
@@ -1580,6 +1590,15 @@ def _apply_plan(all_dirs, to_investigate, plan, target):
             abs_path = rel_to_abs[rel]
             shallow_set.add(abs_path)
             turn_map[abs_path] = _SHALLOW_TURNS
+        else:
+            unmatched.append(rel)
+
+    if unmatched:
+        print(
+            f"  [AI] Warning: plan referenced unknown dirs: "
+            f"{', '.join(unmatched)}",
+            file=sys.stderr,
+        )
 
     # Remove skipped dirs from the investigation list.
     remaining = [d for d in to_investigate if d not in skip_set]

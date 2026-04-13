@@ -878,6 +878,30 @@ class TestApplyPlan(unittest.TestCase):
         )
         self.assertEqual(len(ordered), len(subset))
 
+    def test_target_root_matched_by_basename(self):
+        """Plan can reference the target root by its basename, not just '.' (#76)."""
+        plan = _default_plan()
+        basename = os.path.basename(self.tmp)
+        plan["priority_dirs"] = [
+            {"path": basename, "reason": "root is important",
+             "suggested_turns": 18},
+        ]
+        _, turn_map = _apply_plan(
+            self.all_dirs, list(self.all_dirs), plan, self.target,
+        )
+        self.assertEqual(turn_map[self.tmp], 18)
+
+    def test_target_root_matched_by_dot(self):
+        """Plan can also reference the target root as '.'."""
+        plan = _default_plan()
+        plan["priority_dirs"] = [
+            {"path": ".", "reason": "root", "suggested_turns": 16},
+        ]
+        _, turn_map = _apply_plan(
+            self.all_dirs, list(self.all_dirs), plan, self.target,
+        )
+        self.assertEqual(turn_map[self.tmp], 16)
+
 
 # ---------------------------------------------------------------------------
 # _get_child_summaries (updated placeholder behavior)
